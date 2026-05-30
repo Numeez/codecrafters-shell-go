@@ -21,62 +21,66 @@ type BellCompleter struct {
 }
 
 func (b *BellCompleter) Do(line []rune, pos int) ([][]rune, int) {
-    current := string(line[:pos])
+	current := string(line[:pos])
 
-    if current == b.lastLine {
-        b.tabCount++
-    } else {
-        b.tabCount = 1
-        b.lastLine = current
-    }
+	if current == b.lastLine {
+		b.tabCount++
+	} else {
+		b.tabCount = 1
+		b.lastLine = current
+	}
 
-    candidates, length := b.inner.Do(line, pos)
+	candidates, length := b.inner.Do(line, pos)
+	fmt.Fprintf(os.Stderr, "DEBUG: current=%q len(candidates)=%d length=%d\n", current, len(candidates), length)
+	for i, c := range candidates {
+		fmt.Fprintf(os.Stderr, "  candidate[%d]: %q\n", i, string(c))
+	}
 
-    if len(candidates) == 0 {
-        tty, _ := os.OpenFile("/dev/tty", os.O_WRONLY, 0)
-        if tty != nil {
-            defer tty.Close()
-            tty.Write([]byte("\a"))
-        }
-        return candidates, length
+	if len(candidates) == 0 {
+		tty, _ := os.OpenFile("/dev/tty", os.O_WRONLY, 0)
+		if tty != nil {
+			defer tty.Close()
+			tty.Write([]byte("\a"))
+		}
+		return candidates, length
 
-    } else if len(candidates) == 1 {
-       full := current + string(candidates[0])
-    full = strings.TrimRight(full, " ")
-    // return only the suffix + space, not the full word
-    suffix := full[len(current):]
-    withSpace := []rune(suffix + " ")
-    b.tabCount = 0
-    return [][]rune{withSpace}, length
+	} else if len(candidates) == 1 {
+		full := current + string(candidates[0])
+		full = strings.TrimRight(full, " ")
+		// return only the suffix + space, not the full word
+		suffix := full[len(current):]
+		withSpace := []rune(suffix + " ")
+		b.tabCount = 0
+		return [][]rune{withSpace}, length
 
-    } else {
-        // multiple matches
-        if b.tabCount == 1 {
-            // first tab — ring bell only
-            tty, _ := os.OpenFile("/dev/tty", os.O_WRONLY, 0)
-            if tty != nil {
-                defer tty.Close()
-                tty.Write([]byte("\a"))
-            }
-            return [][]rune{}, 0
+	} else {
+		// multiple matches
+		if b.tabCount == 1 {
+			// first tab — ring bell only
+			tty, _ := os.OpenFile("/dev/tty", os.O_WRONLY, 0)
+			if tty != nil {
+				defer tty.Close()
+				tty.Write([]byte("\a"))
+			}
+			return [][]rune{}, 0
 
-        } else {
-            // second tab — print matches and reprint prompt with original input
-            var names []string
-            for _, c := range candidates {
-                names = append(names, current+string(c))
-            }
-            sort.Strings(names)
+		} else {
+			// second tab — print matches and reprint prompt with original input
+			var names []string
+			for _, c := range candidates {
+				names = append(names, current+string(c))
+			}
+			sort.Strings(names)
 
-            os.Stdout.Write([]byte("\r\n"))
-            os.Stdout.Write([]byte(strings.Join(names, "  ")))
-            os.Stdout.Write([]byte("\r\n"))
-            os.Stdout.Write([]byte("$ " + current)) // keep original prefix
+			os.Stdout.Write([]byte("\r\n"))
+			os.Stdout.Write([]byte(strings.Join(names, "  ")))
+			os.Stdout.Write([]byte("\r\n"))
+			os.Stdout.Write([]byte("$ " + current)) // keep original prefix
 
-            b.tabCount = 0
-            return [][]rune{}, 0 // don't complete, keep current input as is
-        }
-    }
+			b.tabCount = 0
+			return [][]rune{}, 0 // don't complete, keep current input as is
+		}
+	}
 }
 func main() {
 	builtins := []readline.PrefixCompleterInterface{
