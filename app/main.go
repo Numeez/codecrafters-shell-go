@@ -13,21 +13,39 @@ import (
 
 var _ = fmt.Print
 
+type BellCompleter struct {
+    inner readline.AutoCompleter
+}
+
+func (b *BellCompleter) Do(line []rune, pos int) ([][]rune, int) {
+    candidates, length := b.inner.Do(line, pos)
+    if len(candidates) == 0 {
+        tty, err := os.OpenFile("/dev/tty", os.O_WRONLY, 0)
+        if err == nil {
+            defer tty.Close()
+            tty.Write([]byte("\a"))
+        }
+    }
+    return candidates, length
+}
 func main() {
-	completer := readline.NewPrefixCompleter(
-		readline.PcItem("echo"),
-		readline.PcItem("cd"),
-		readline.PcItem("ls"),
-		readline.PcItem("pwd"),
-		readline.PcItem("exit"),
-		readline.PcItem("type"),
-	)
+	completer := &BellCompleter{
+		inner: readline.NewPrefixCompleter(
+			readline.PcItem("echo"),
+			readline.PcItem("cd"),
+			readline.PcItem("ls"),
+			readline.PcItem("pwd"),
+			readline.PcItem("exit"),
+			readline.PcItem("type"),
+		),
+	}
 
 	rl, err := readline.NewEx(&readline.Config{
 		Prompt:          "$ ",
 		AutoComplete:    completer,
 		InterruptPrompt: "^C",
 		EOFPrompt:       "exit",
+		VimMode:         false,
 	})
 	if err != nil {
 		panic(err)
