@@ -64,7 +64,7 @@ func makeString(input []string)string{
 
 func typeCommand(command string){
 	switch command{
-	case "exit","echo":
+	case "exit","echo","type":
 		fmt.Fprintf(os.Stdout, "%s is a shell builtin\n", command)
 	default:
 		fmt.Fprintf(os.Stdout, "%s: command not found\n", command)
