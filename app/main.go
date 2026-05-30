@@ -67,7 +67,7 @@ func typeCommand(command string){
 	case "exit","echo","type":
 		fmt.Fprintf(os.Stdout, "%s is a shell builtin\n", command)
 	default:
-		fmt.Fprintf(os.Stdout, "%s: command not found\n", command)
+		fmt.Fprintf(os.Stdout, "%s: not found\n", command)
 	}
 
 
