@@ -27,20 +27,14 @@ func main() {
 }
 
 func handleInput(input string) {
-	inputs := strings.Split(input, " ")
-	var command string
-	var rest []string
-	if len(inputs) > 0 {
-		command = inputs[0]
-		if len(inputs[1:]) != 0 {
-			rest = inputs[1:]
-		}
-	}
+	args:=parseArgs(input)
+	command := args[0]
+	rest := args[1:]
 	switch command {
 	case "exit":
 		os.Exit(0)
 	case "echo":
-		fmt.Fprintf(os.Stdout, "%s\n", makeString(rest))
+		fmt.Fprintf(os.Stdout, "%s\n", makeStringForEcho(rest))
 	case "type":
 		typeCommand(makeString(rest))
 	case "pwd":
@@ -50,23 +44,25 @@ func handleInput(input string) {
 		} else {
 			fmt.Fprintf(os.Stdout, "%s\n", pwd)
 		}
+	case "":
+		return
 	case "cd":
-		path:=rest[0]
-		info,err:=os.Stat(path)
-		if path=="~"{
+		path := rest[0]
+		info, err := os.Stat(path)
+		if path == "~" {
 			os.Chdir(os.Getenv("HOME"))
 			break
 		}
-		if err!=nil{
-			fmt.Fprintf(os.Stdout, "cd: %s: No such file or directory\n",path)
-		}else if os.IsNotExist(err){
-			fmt.Fprintf(os.Stdout, "cd: %s: No such file or directory\n",path)
-		}else if !info.IsDir(){
-			fmt.Fprintf(os.Stdout, "cd: %s: No such file or directory\n",path)
-		}else{
-			err:= os.Chdir(path)
-			if err!=nil{
-				fmt.Fprintf(os.Stdout,"%s\n",err.Error())	
+		if err != nil {
+			fmt.Fprintf(os.Stdout, "cd: %s: No such file or directory\n", path)
+		} else if os.IsNotExist(err) {
+			fmt.Fprintf(os.Stdout, "cd: %s: No such file or directory\n", path)
+		} else if !info.IsDir() {
+			fmt.Fprintf(os.Stdout, "cd: %s: No such file or directory\n", path)
+		} else {
+			err := os.Chdir(path)
+			if err != nil {
+				fmt.Fprintf(os.Stdout, "%s\n", err.Error())
 			}
 		}
 
@@ -100,6 +96,79 @@ func makeString(input []string) string {
 		}
 	}
 	return out.String()
+}
+
+func makeStringForEcho(input []string) string {
+	var out bytes.Buffer
+	for i, str := range input {
+		if i == len(input)-1 {
+			out.WriteString(str)
+		} else {
+			out.WriteString(str)
+			out.WriteString(" ")
+		}
+	}
+	rawInput := out.String()
+	args := parseArgs(rawInput)
+	var result bytes.Buffer
+	for i, str := range args {
+		if i == len(input)-1 {
+			result.WriteString(str)
+		} else {
+			result.WriteString(str)
+			result.WriteString(" ")
+		}
+	}
+	return out.String()
+
+}
+
+func parseArgs(input string) []string {
+	var args []string
+	var current strings.Builder
+	inSingleQuote := false
+
+	for i := 0; i < len(input); i++ {
+		ch := input[i]
+
+		switch {
+		case ch == '\'' && !inSingleQuote:
+			inSingleQuote = true // enter single quote mode
+
+		case ch == '\'' && inSingleQuote:
+			inSingleQuote = false // exit single quote mode
+
+		case ch == ' ' && !inSingleQuote:
+			// space outside quotes = argument boundary
+			if current.Len() > 0 {
+				args = append(args, current.String())
+				current.Reset()
+			}
+
+		default:
+			current.WriteByte(ch)
+		}
+	}
+
+	// don't forget the last argument
+	if current.Len() > 0 {
+		args = append(args, current.String())
+	}
+
+	return args
+}
+
+func processQuotes(input string) string {
+	idx := strings.Index(input, "'")
+	if idx == -1 {
+		return input
+	}
+	leftIdx := strings.Index(input[idx+1:], "'")
+	if leftIdx == -1 {
+		return input
+	}
+
+	return input[idx+1 : idx+1+leftIdx]
 }
 
 func typeCommand(command string) {
