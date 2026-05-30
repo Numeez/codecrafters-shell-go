@@ -161,7 +161,7 @@ func handleEcho(input []string) {
         defer file.Close()
 
         if redirectType == "2>" {
-            fmt.Fprintf(file, "%s\n", content)
+            fmt.Fprintf(os.Stdout, "%s\n", content)
         } else {
             _, err = file.WriteString(content + "\n")
             if err != nil {
