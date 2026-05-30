@@ -24,11 +24,11 @@ func (b *BellCompleter) Do(line []rune, pos int) ([][]rune, int) {
 	current := string(line[:pos])
 
 	if current == b.lastLine {
-		b.tabCount++
-	} else {
-		b.tabCount = 1
-		b.lastLine = current
-	}
+    b.tabCount++
+} else {
+    b.tabCount = 1
+    b.lastLine = current
+}
 
 	candidates, length := b.inner.Do(line, pos)
 
