@@ -98,8 +98,6 @@ func handleInput(input string) {
 				cmd = exec.Command(command, rest...)
 				cmd.Stdout = os.Stdout
 			}
-
-			// ✅ called once, after Stdout is set
 			cmd.Stderr = os.Stderr
 			cmd.Stdin = os.Stdin
 			err := cmd.Run()
@@ -128,7 +126,7 @@ func makeString(input []string) string {
 func handleEcho(input []string) {
 	length := len(input)
 
-	if length >= 3 && input[length-2] == ">" {
+	if length >= 3 && strings.Contains(input[length-2], ">") {
 		filePath := input[length-1]
 		content := makeStringForEcho(input[:length-2])
 		dir := filepath.Dir(filePath)
