@@ -96,7 +96,7 @@ func handleInput(input string) {
 				cmd = exec.Command(command, cmdArgs...)
 				if redirectType == "2>" {
 					cmd.Stdout = os.Stdout
-					cmd.Stderr = file 
+					cmd.Stderr = file
 				} else {
 					cmd.Stdout = os.Stdout
 					cmd.Stderr = file
@@ -133,26 +133,49 @@ func makeString(input []string) string {
 	return out.String()
 }
 func handleEcho(input []string) {
-	length := len(input)
+    args := input[1:] // skip "echo"
 
-	if length >= 3 && strings.Contains(input[length-2], ">") {
-		filePath := input[length-1]
-		content := makeStringForEcho(input[:length-2])
-		dir := filepath.Dir(filePath)
-		err := os.MkdirAll(dir, 0755)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "%s\n", err.Error())
-			return
-		}
-		file, err := os.Create(filePath)
-		_, err = file.WriteString(content + "\n")
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "%s\n", err.Error())
-			return
-		}
-	} else {
-		fmt.Fprintf(os.Stdout, "%s\n", makeStringForEcho(input))
-	}
+    // find ">" or "1>" or "2>"
+    redirectIdx := -1
+    redirectType := ""
+    for i, arg := range args {
+        if arg == ">" || arg == "1>" || arg == "2>" {
+            redirectIdx = i
+            redirectType = arg
+            break
+        }
+    }
+
+    if redirectIdx != -1 {
+        filePath := args[redirectIdx+1]
+        content := makeStringForEcho(args[:redirectIdx])
+
+        err := os.MkdirAll(filepath.Dir(filePath), 0755)
+        if err != nil {
+            fmt.Fprintf(os.Stderr, "%s\n", err.Error())
+            return
+        }
+
+        file, err := os.Create(filePath)
+        if err != nil {
+            fmt.Fprintf(os.Stderr, "%s\n", err.Error())
+            return
+        }
+        defer file.Close()
+
+        if redirectType == "2>" {
+            // echo doesn't write to stderr, so this is a no-op
+            fmt.Fprintf(os.Stdout, "%s\n", content)
+        } else {
+            // ">" or "1>" — write to file
+            _, err = file.WriteString(content + "\n")
+            if err != nil {
+                fmt.Fprintf(os.Stderr, "%s\n", err.Error())
+            }
+        }
+    } else {
+        fmt.Fprintf(os.Stdout, "%s\n", makeStringForEcho(args))
+    }
 }
 
 func makeStringForEcho(input []string) string {
