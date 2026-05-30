@@ -27,7 +27,7 @@ func main() {
 }
 
 func handleInput(input string) {
-	args:=parseArgs(input)
+	args := parseArgs(input)
 	command := args[0]
 	rest := args[1:]
 	switch command {
@@ -124,55 +124,47 @@ func makeStringForEcho(input []string) string {
 }
 
 func parseArgs(input string) []string {
-    var args []string
-    var current strings.Builder
-    inSingleQuote := false
-    inDoubleQuote := false
+	var args []string
+	var current strings.Builder
+	inSingleQuote := false
+	inDoubleQuote := false
 
-    for i := 0; i < len(input); i++ {
-        ch := input[i]
-        switch {
-        case ch == '\'' && !inSingleQuote && !inDoubleQuote:
-            inSingleQuote = true
+	for i := 0; i < len(input); i++ {
+		ch := input[i]
+		switch {
+		case ch == '\'' && !inSingleQuote && !inDoubleQuote:
+			inSingleQuote = true
 
-        case ch == '\'' && inSingleQuote:
-            inSingleQuote = false
+		case ch == '\'' && inSingleQuote:
+			inSingleQuote = false
 
-        case ch == '"' && !inDoubleQuote && !inSingleQuote:
-            inDoubleQuote = true
+		case ch == '"' && !inDoubleQuote && !inSingleQuote:
+			inDoubleQuote = true
 
-        case ch == '"' && inDoubleQuote:
-            inDoubleQuote = false
+		case ch == '"' && inDoubleQuote:
+			inDoubleQuote = false
 
-        case ch == ' ' && !inSingleQuote && !inDoubleQuote:
-            if current.Len() > 0 {
-                args = append(args, current.String())
-                current.Reset()
-            }
+		case ch == ' ' && !inSingleQuote && !inDoubleQuote:
+			if current.Len() > 0 {
+				args = append(args, current.String())
+				current.Reset()
+			}
+		case ch == '\\' && !inSingleQuote && !inDoubleQuote:
+			i++
+			if i < len(input) {
+				current.WriteByte(input[i])
+			}
 
-        default:
-            current.WriteByte(ch)
-        }
-    }
-
-    if current.Len() > 0 {
-        args = append(args, current.String())
-    }
-
-    return args
-}
-
-func processQuotes(input string) string {
-	idx := strings.Index(input, "'")
-	if idx == -1 {
-		return input
-	}
-	leftIdx := strings.Index(input[idx+1:], "'")
-	if leftIdx == -1 {
-		return input
+		default:
+			current.WriteByte(ch)
+		}
 	}
 
-	return input[idx+1 : idx+1+leftIdx]
+	if current.Len() > 0 {
+		args = append(args, current.String())
+	}
+
+	return args
 }
 
 func typeCommand(command string) {
