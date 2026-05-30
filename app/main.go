@@ -98,28 +98,26 @@ func makeString(input []string) string {
 	return out.String()
 }
 func handleEcho(input []string) {
-    length := len(input)
+	length := len(input)
 
-    // check if second-to-last element is ">"
-    if length >= 3 && input[length-2] == ">" {
-        fileName := input[length-1]              // file is the last element
-        content := makeStringForEcho(input[:length-2]) // everything before ">"
-
-        file, err := os.Create(fileName)
-        if err != nil {
-            fmt.Fprintf(os.Stderr, "%s\n", err.Error())
-            return
-        }
-        defer file.Close()
-
-        _, err = file.WriteString(content + "\n")
-        if err != nil {
-            fmt.Fprintf(os.Stderr, "%s\n", err.Error())
-            return
-        }
-    } else {
-        fmt.Fprintf(os.Stdout, "%s\n", makeStringForEcho(input))
-    }
+	if length >= 3 && input[length-2] == ">" {
+		filePath := input[length-1]
+		content := makeStringForEcho(input[:length-2])
+		dir := filepath.Dir(filePath)
+		err := os.MkdirAll(dir, 0755)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "%s\n", err.Error())
+			return
+		}
+		file, err := os.Create(filePath)
+		_, err = file.WriteString(content + "\n")
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "%s\n", err.Error())
+			return
+		}
+	} else {
+		fmt.Fprintf(os.Stdout, "%s\n", makeStringForEcho(input))
+	}
 }
 
 func makeStringForEcho(input []string) string {
