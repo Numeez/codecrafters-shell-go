@@ -39,6 +39,8 @@ func handleInput(input string) {
 		os.Exit(0)
 	case "echo":
 		fmt.Fprintf(os.Stdout, "%s\n",makeString(rest))
+	case "type":
+		typeCommand(makeString(rest))
 	default:
 		fmt.Fprintf(os.Stdout, "%s: command not found", input)
 		fmt.Fprintf(os.Stdout, "\n")
