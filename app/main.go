@@ -111,7 +111,8 @@ func handleInput(input string) {
 			cmd.Stdin = os.Stdin
 			err := cmd.Run()
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "%s\n", err.Error())
+				// fmt.Fprintf(os.Stderr, "%s\n", err.Error())
+				return
 			}
 		} else {
 			fmt.Fprintf(os.Stdout, "%s: command not found\n", command)
