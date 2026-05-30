@@ -69,17 +69,45 @@ func handleInput(input string) {
 	default:
 		commandFound, _, _ := commandExists(command)
 		if commandFound {
-			cmd := exec.Command(command, rest...)
-			output, err := cmd.Output()
-			if err != nil {
-				fmt.Fprintf(os.Stdout, "%s\n", err.Error())
-			} else {
-				fmt.Fprintf(os.Stdout, "%s", string(output))
+			// find redirect in args
+			redirectIdx := -1
+			for i, arg := range rest {
+				if arg == ">" {
+					redirectIdx = i
+					break
+				}
 			}
 
+			var cmd *exec.Cmd
+			if redirectIdx != -1 {
+				cmdArgs := rest[:redirectIdx]
+				filePath := rest[redirectIdx+1]
+
+				os.MkdirAll(filepath.Dir(filePath), 0755)
+
+				file, err := os.Create(filePath)
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "%s\n", err.Error())
+					return
+				}
+				defer file.Close()
+
+				cmd = exec.Command(command, cmdArgs...)
+				cmd.Stdout = file
+			} else {
+				cmd = exec.Command(command, rest...)
+				cmd.Stdout = os.Stdout
+			}
+
+			// ✅ called once, after Stdout is set
+			cmd.Stderr = os.Stderr
+			cmd.Stdin = os.Stdin
+			err := cmd.Run()
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "%s\n", err.Error())
+			}
 		} else {
-			fmt.Fprintf(os.Stdout, "%s: command not found", input)
-			fmt.Fprintf(os.Stdout, "\n")
+			fmt.Fprintf(os.Stdout, "%s: command not found\n", command)
 		}
 
 	}
