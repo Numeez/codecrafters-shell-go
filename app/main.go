@@ -50,6 +50,21 @@ func handleInput(input string) {
 		} else {
 			fmt.Fprintf(os.Stdout, "%s\n", pwd)
 		}
+	case "cd":
+		path:=rest[0]
+		info,err:=os.Stat(path)
+		if err!=nil{
+			fmt.Fprintf(os.Stdout, "cd: %s: No such file or directory\n",path)
+		}else if os.IsNotExist(err){
+			fmt.Fprintf(os.Stdout, "cd: %s: No such file or directory\n",path)
+		}else if !info.IsDir(){
+			fmt.Fprintf(os.Stdout, "cd: %s: No such file or directory\n",path)
+		}else{
+			err:= os.Chdir(path)
+			if err!=nil{
+				fmt.Fprintf(os.Stdout,"%s\n",err.Error())	
+			}
+		}
 
 	default:
 		commandFound, _, _ := commandExists(command)
