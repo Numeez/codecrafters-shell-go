@@ -33,49 +33,44 @@ func (b *BellCompleter) Do(line []rune, pos int) ([][]rune, int) {
 	candidates, length := b.inner.Do(line, pos)
 
 	if len(candidates) == 0 {
-		tty, err := os.OpenFile("/dev/tty", os.O_WRONLY, 0)
-		if err == nil {
+		tty, _ := os.OpenFile("/dev/tty", os.O_WRONLY, 0)
+		if tty != nil {
 			defer tty.Close()
 			tty.Write([]byte("\a"))
 		}
 		return candidates, length
-	}
 
-	if len(candidates) == 1 {
-    candidate := strings.TrimRight(string(candidates[0]), " ") 
-    withSpace := []rune(candidate + " ")
-    b.tabCount = 0
-    return [][]rune{withSpace}, length
-}
-
-	if b.tabCount == 1 {
-
-		tty, err := os.OpenFile("/dev/tty", os.O_WRONLY, 0)
-		if err == nil {
-			defer tty.Close()
-			tty.Write([]byte("\a"))
-		}
-		return [][]rune{}, 0
+	} else if len(candidates) == 1 {
+		// single match — complete with trailing space
+		candidate := strings.TrimRight(string(candidates[0]), " ")
+		withSpace := []rune(candidate + " ")
+		b.tabCount = 0
+		return [][]rune{withSpace}, length
 
 	} else {
-		var names []string
-		for _, c := range candidates {
-			names = append(names, current+string(c))
-		}
-		sort.Strings(names)
+		// multiple matches
+		if b.tabCount == 1 {
+			tty, _ := os.OpenFile("/dev/tty", os.O_WRONLY, 0)
+			if tty != nil {
+				defer tty.Close()
+				tty.Write([]byte("\a"))
+			}
+			return [][]rune{}, 0
+		} else {
+			var names []string
+			for _, c := range candidates {
+				names = append(names, current+string(c))
+			}
+			sort.Strings(names)
 
-		tty, err := os.OpenFile("/dev/tty", os.O_WRONLY, 0)
-		if err == nil {
-			defer tty.Close()
-			tty.Write([]byte("\r\n"))
-			tty.Write([]byte(strings.Join(names, "  ")))
-			tty.Write([]byte("\r\n"))
-			// reprint prompt and current input
-			tty.Write([]byte("$ " + current))
-		}
+			os.Stdout.Write([]byte("\r\n"))
+			os.Stdout.Write([]byte(strings.Join(names, "  ")))
+			os.Stdout.Write([]byte("\r\n"))
+			os.Stdout.Write([]byte("$ " + current))
 
-		b.tabCount = 0
-		return [][]rune{}, 0
+			b.tabCount = 0
+			return [][]rune{}, 0
+		}
 	}
 }
 func main() {
