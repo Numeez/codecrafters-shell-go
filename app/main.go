@@ -14,29 +14,34 @@ import (
 var _ = fmt.Print
 
 type BellCompleter struct {
-    inner readline.AutoCompleter
+	inner readline.AutoCompleter
 }
 
 func (b *BellCompleter) Do(line []rune, pos int) ([][]rune, int) {
-    candidates, length := b.inner.Do(line, pos)
-    if len(candidates) == 0 {
-        tty, err := os.OpenFile("/dev/tty", os.O_WRONLY, 0)
-        if err == nil {
-            defer tty.Close()
-            tty.Write([]byte("\a"))
-        }
-    }
-    return candidates, length
+	candidates, length := b.inner.Do(line, pos)
+	if len(candidates) == 0 {
+		tty, err := os.OpenFile("/dev/tty", os.O_WRONLY, 0)
+		if err == nil {
+			defer tty.Close()
+			tty.Write([]byte("\a"))
+		}
+	}
+	return candidates, length
 }
 func main() {
+	builtins := []readline.PrefixCompleterInterface{
+		readline.PcItem("echo"),
+		readline.PcItem("cd"),
+		readline.PcItem("pwd"),
+		readline.PcItem("exit"),
+		readline.PcItem("type"),
+	}
+
+	// combine builtins + PATH commands
+	allItems := append(builtins, getPathCommands()...)
 	completer := &BellCompleter{
 		inner: readline.NewPrefixCompleter(
-			readline.PcItem("echo"),
-			readline.PcItem("cd"),
-			readline.PcItem("ls"),
-			readline.PcItem("pwd"),
-			readline.PcItem("exit"),
-			readline.PcItem("type"),
+			allItems...,
 		),
 	}
 
@@ -369,4 +374,26 @@ func handleCommand(command string, rest []string) {
 	if err != nil && redirectIdx == -1 {
 		fmt.Fprintf(os.Stderr, "%s\n", err.Error())
 	}
+}
+
+func getPathCommands() []readline.PrefixCompleterInterface {
+	var items []readline.PrefixCompleterInterface
+
+	seen := make(map[string]bool) // avoid duplicates
+	dirs := strings.Split(os.Getenv("PATH"), ":")
+
+	for _, dir := range dirs {
+		entries, err := os.ReadDir(dir)
+		if err != nil {
+			continue
+		}
+		for _, entry := range entries {
+			name := entry.Name()
+			if !seen[name] {
+				seen[name] = true
+				items = append(items, readline.PcItem(name))
+			}
+		}
+	}
+	return items
 }
