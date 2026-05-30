@@ -43,6 +43,14 @@ func handleInput(input string) {
 		fmt.Fprintf(os.Stdout, "%s\n", makeString(rest))
 	case "type":
 		typeCommand(makeString(rest))
+	case "pwd":
+		pwd, err := os.Getwd()
+		if err != nil {
+			fmt.Fprintf(os.Stdout, "%s\n", err.Error())
+		} else {
+			fmt.Fprintf(os.Stdout, "%s\n", pwd)
+		}
+
 	default:
 		commandFound, _, _ := commandExists(command)
 		if commandFound {
@@ -77,7 +85,7 @@ func makeString(input []string) string {
 
 func typeCommand(command string) {
 	switch command {
-	case "exit", "echo", "type":
+	case "exit", "echo", "type", "pwd":
 		fmt.Fprintf(os.Stdout, "%s is a shell builtin\n", command)
 	default:
 		commandFound, dir, file := commandExists(command)
