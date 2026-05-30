@@ -324,7 +324,8 @@ func handleCommand(command string, rest []string) {
 	}
 
 	cmd.Stdin = os.Stdin
-	if err := cmd.Run(); err != nil {
+	err := cmd.Run()
+	if err != nil && redirectIdx == -1 {
 		fmt.Fprintf(os.Stderr, "%s\n", err.Error())
 	}
 }
