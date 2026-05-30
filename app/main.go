@@ -66,75 +66,7 @@ func handleInput(input string) {
 		}
 
 	default:
-		commandFound, _, _ := commandExists(command)
-		if commandFound {
-			redirectIdx := -1
-			redirectType := ""
-			for i, arg := range rest {
-				if arg == ">" || arg == "1>" || arg == "2>" {
-					redirectIdx = i
-					redirectType = arg
-					break
-				}
-				if arg == ">>" || arg == "1>>" || arg == "2>>" {
-					redirectIdx = i
-					redirectType = arg
-					break
-				}
-
-			}
-
-			var cmd *exec.Cmd
-			if redirectIdx != -1 {
-				cmdArgs := rest[:redirectIdx]
-				filePath := rest[redirectIdx+1]
-				var file *os.File
-				var fileErr error
-				os.MkdirAll(filepath.Dir(filePath), 0755)
-				if redirectType == ">>" || redirectType == ">>1" {
-					_, err := os.Stat(filePath)
-					if err != nil {
-						fmt.Fprintf(os.Stderr, "%s\n", err.Error())
-						return
-					}
-					if os.IsNotExist(err) {
-						file, fileErr = os.Create(filePath)
-					} else {
-						file, fileErr = os.OpenFile(filePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-
-					}
-				} else {
-					file, fileErr = os.Create(filePath)
-
-				}
-				defer file.Close()
-				if fileErr != nil {
-					fmt.Fprintf(os.Stderr, "%s\n", fileErr.Error())
-					return
-				}
-
-				cmd = exec.Command(command, cmdArgs...)
-				if redirectType == "2>" {
-					cmd.Stdout = os.Stdout
-					cmd.Stderr = file
-				} else {
-					cmd.Stdout = file
-					cmd.Stderr = os.Stderr
-				}
-			} else {
-				cmd = exec.Command(command, rest...)
-				cmd.Stdout = os.Stdout
-				cmd.Stderr = os.Stderr
-			}
-
-			cmd.Stdin = os.Stdin
-			err := cmd.Run()
-			if err != nil {
-				return
-			}
-		} else {
-			fmt.Fprintf(os.Stderr, "%s: command not found\n", command)
-		}
+		handleCommand(command, rest)
 
 	}
 }
@@ -152,15 +84,13 @@ func makeString(input []string) string {
 	return out.String()
 }
 func handleEcho(input []string) {
+	args := input[1:] // skip "echo"
+
 	redirectIdx := -1
 	redirectType := ""
-	for i, arg := range input {
-		if arg == ">" || arg == "1>" || arg == "2>" {
-			redirectIdx = i
-			redirectType = arg
-			break
-		}
-		if arg == ">>" || arg == "1>>" || arg == "2>>" {
+	for i, arg := range args {
+		if arg == ">" || arg == "1>" || arg == "2>" ||
+			arg == ">>" || arg == "1>>" || arg == "2>>" {
 			redirectIdx = i
 			redirectType = arg
 			break
@@ -168,40 +98,31 @@ func handleEcho(input []string) {
 	}
 
 	if redirectIdx != -1 {
-		filePath := input[redirectIdx+1]
-		content := makeStringForEcho(input[:redirectIdx])
-		var file *os.File
-		var fileErr error
+		filePath := args[redirectIdx+1]
+		content := makeStringForEcho(args[:redirectIdx])
+
 		err := os.MkdirAll(filepath.Dir(filePath), 0755)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "%s\n", err.Error())
 			return
 		}
 
-		if redirectType == ">>" || redirectType == ">>1" {
-			_, err := os.Stat(filePath)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "%s\n", err.Error())
-				return
-			}
-			if os.IsNotExist(err) {
-				file, fileErr = os.Create(filePath)
-			} else {
-				file, fileErr = os.OpenFile(filePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-
-			}
+		var file *os.File
+		if redirectType == ">>" || redirectType == "1>>" {
+			// append mode — O_CREATE handles file not existing
+			file, err = os.OpenFile(filePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 		} else {
-			file, fileErr = os.Create(filePath)
-
+			// truncate mode
+			file, err = os.Create(filePath)
 		}
-		defer file.Close()
-		if fileErr != nil {
-			fmt.Fprintf(os.Stderr, "%s\n", fileErr.Error())
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "%s\n", err.Error())
 			return
 		}
-		file.WriteString(fmt.Sprintf("%s\n", makeStringForEcho(input)))
+		defer file.Close()
 
-		if redirectType == "2>" {
+		if redirectType == "2>" || redirectType == "2>>" {
+			// echo has no stderr, just print to stdout normally
 			fmt.Fprintf(os.Stdout, "%s\n", content)
 		} else {
 			_, err = file.WriteString(content + "\n")
@@ -210,10 +131,9 @@ func handleEcho(input []string) {
 			}
 		}
 	} else {
-		fmt.Fprintf(os.Stdout, "%s\n", makeStringForEcho(input))
+		fmt.Fprintf(os.Stdout, "%s\n", makeStringForEcho(args))
 	}
 }
-
 func makeStringForEcho(input []string) string {
 	var out bytes.Buffer
 	for i, str := range input {
@@ -345,4 +265,68 @@ func commandExists(command string) (bool, string, string) {
 		}
 	}
 	return commandFound, "", ""
+}
+
+func handleCommand(command string, rest []string) {
+	commandFound, _, _ := commandExists(command)
+	if !commandFound {
+		fmt.Fprintf(os.Stderr, "%s: command not found\n", command)
+		return
+	}
+
+	// find redirect
+	redirectIdx := -1
+	redirectType := ""
+	for i, arg := range rest {
+		if arg == ">" || arg == "1>" || arg == "2>" ||
+			arg == ">>" || arg == "1>>" || arg == "2>>" {
+			redirectIdx = i
+			redirectType = arg
+			break
+		}
+	}
+
+	var cmd *exec.Cmd
+
+	if redirectIdx != -1 {
+		cmdArgs := rest[:redirectIdx]
+		filePath := rest[redirectIdx+1]
+
+		err := os.MkdirAll(filepath.Dir(filePath), 0755)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "%s\n", err.Error())
+			return
+		}
+
+		var file *os.File
+		if redirectType == ">>" || redirectType == "1>>" || redirectType == "2>>" {
+			// O_CREATE handles file not existing — no need for os.Stat
+			file, err = os.OpenFile(filePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+		} else {
+			file, err = os.Create(filePath)
+		}
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "%s\n", err.Error())
+			return
+		}
+		defer file.Close()
+
+		cmd = exec.Command(command, cmdArgs...)
+		if redirectType == "2>" || redirectType == "2>>" {
+			cmd.Stdout = os.Stdout
+			cmd.Stderr = file
+		} else {
+			cmd.Stdout = file
+			cmd.Stderr = os.Stderr
+		}
+	} else {
+		cmd = exec.Command(command, rest...)
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+	}
+
+	cmd.Stdin = os.Stdin
+	if err := cmd.Run(); err != nil {
+		fmt.Fprintf(os.Stderr, "%s\n", err.Error())
+	}
 }
