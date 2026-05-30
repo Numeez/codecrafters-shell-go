@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 )
@@ -43,8 +44,20 @@ func handleInput(input string) {
 	case "type":
 		typeCommand(makeString(rest))
 	default:
-		fmt.Fprintf(os.Stdout, "%s: command not found", input)
-		fmt.Fprintf(os.Stdout, "\n")
+		commandFound, _, _ := commandExists(command)
+		if commandFound {
+			cmd := exec.Command(command, rest...)
+			output, err := cmd.Output()
+			if err != nil {
+				fmt.Fprintf(os.Stdout, "%s\n", err.Error())
+			} else {
+				fmt.Fprintf(os.Stdout, "%s", string(output))
+			}
+
+		} else {
+			fmt.Fprintf(os.Stdout, "%s: command not found", input)
+			fmt.Fprintf(os.Stdout, "\n")
+		}
 
 	}
 }
@@ -67,33 +80,39 @@ func typeCommand(command string) {
 	case "exit", "echo", "type":
 		fmt.Fprintf(os.Stdout, "%s is a shell builtin\n", command)
 	default:
-		commandFound := false
-		directories := strings.Split(os.Getenv("PATH"), ":")
-			 
-		outer: for _, dir := range directories {
-			entries, err := os.ReadDir(dir)
-			if err != nil {
-				continue
-			}
-			for _, entry := range entries {
-				if entry.Name() == command {
-					info, err := os.Stat(filepath.Join(dir, entry.Name()))
-					if err != nil {
-						continue
-					}
-					if info.Mode()&0111 != 0 {
-						fmt.Fprintf(os.Stdout, "%s is %s/%s\n", command, dir, entry.Name())
-						commandFound = true
-						break outer
-					}
-				} else {
-					continue
-				}
-			}
-		}
+		commandFound, dir, file := commandExists(command)
 		if !commandFound {
 			fmt.Fprintf(os.Stdout, "%s: not found\n", command)
+		} else {
+			fmt.Fprintf(os.Stdout, "%s is %s/%s\n", command, dir, file)
 		}
 	}
 
+}
+
+func commandExists(command string) (bool, string, string) {
+	commandFound := false
+	directories := strings.Split(os.Getenv("PATH"), ":")
+
+	for _, dir := range directories {
+		entries, err := os.ReadDir(dir)
+		if err != nil {
+			continue
+		}
+		for _, entry := range entries {
+			if entry.Name() == command {
+				info, err := os.Stat(filepath.Join(dir, entry.Name()))
+				if err != nil {
+					continue
+				}
+				if info.Mode()&0111 != 0 {
+					commandFound = true
+					return true, dir, entry.Name()
+				}
+			} else {
+				continue
+			}
+		}
+	}
+	return commandFound, "", ""
 }
