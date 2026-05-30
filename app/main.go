@@ -124,47 +124,69 @@ func makeStringForEcho(input []string) string {
 }
 
 func parseArgs(input string) []string {
-	var args []string
-	var current strings.Builder
-	inSingleQuote := false
-	inDoubleQuote := false
+    var args []string
+    var current strings.Builder
+    inSingleQuote := false
+    inDoubleQuote := false
 
-	for i := 0; i < len(input); i++ {
-		ch := input[i]
-		switch {
-		case ch == '\'' && !inSingleQuote && !inDoubleQuote:
-			inSingleQuote = true
+    for i := 0; i < len(input); i++ {
+        ch := input[i]
+        switch {
 
-		case ch == '\'' && inSingleQuote:
-			inSingleQuote = false
+        // --- single quote ---
+        case ch == '\'' && !inSingleQuote && !inDoubleQuote:
+            inSingleQuote = true
 
-		case ch == '"' && !inDoubleQuote && !inSingleQuote:
-			inDoubleQuote = true
+        case ch == '\'' && inSingleQuote:
+            inSingleQuote = false
 
-		case ch == '"' && inDoubleQuote:
-			inDoubleQuote = false
+        // --- double quote ---
+        case ch == '"' && !inDoubleQuote && !inSingleQuote:
+            inDoubleQuote = true
 
-		case ch == ' ' && !inSingleQuote && !inDoubleQuote:
-			if current.Len() > 0 {
-				args = append(args, current.String())
-				current.Reset()
-			}
-		case ch == '\\' && !inSingleQuote && !inDoubleQuote:
-			i++
-			if i < len(input) {
-				current.WriteByte(input[i])
-			}
+        case ch == '"' && inDoubleQuote:
+            inDoubleQuote = false
 
-		default:
-			current.WriteByte(ch)
-		}
-	}
+        // --- backslash outside quotes ---
+        case ch == '\\' && !inSingleQuote && !inDoubleQuote:
+            i++
+            if i < len(input) {
+                current.WriteByte(input[i])
+            }
 
-	if current.Len() > 0 {
-		args = append(args, current.String())
-	}
+        // --- backslash inside double quotes ---
+        // only escapes special characters
+        case ch == '\\' && inDoubleQuote:
+            if i+1 < len(input) {
+                next := input[i+1]
+                if next == '"' || next == '\\' || next == '$' || next == '`' || next == '\n' {
+                    i++
+                    current.WriteByte(input[i])
+                } else {
+                    current.WriteByte(ch) // literal backslash
+                }
+            }
 
-	return args
+        // --- backslash inside single quotes ---
+        // always literal, handled by default (no case needed)
+
+        // --- space ---
+        case ch == ' ' && !inSingleQuote && !inDoubleQuote:
+            if current.Len() > 0 {
+                args = append(args, current.String())
+                current.Reset()
+            }
+
+        default:
+            current.WriteByte(ch)
+        }
+    }
+
+    if current.Len() > 0 {
+        args = append(args, current.String())
+    }
+
+    return args
 }
 
 func typeCommand(command string) {
