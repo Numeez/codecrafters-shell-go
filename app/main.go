@@ -69,7 +69,6 @@ func handleInput(input string) {
 	default:
 		commandFound, _, _ := commandExists(command)
 		if commandFound {
-			// find ">" or "1>" or "2>" in args
 			redirectIdx := -1
 			redirectType := ""
 			for i, arg := range rest {
@@ -97,10 +96,10 @@ func handleInput(input string) {
 				cmd = exec.Command(command, cmdArgs...)
 				if redirectType == "2>" {
 					cmd.Stdout = os.Stdout
-					cmd.Stderr = file // only stderr to file
+					cmd.Stderr = file 
 				} else {
-					cmd.Stdout = file // stdout (or 1>) to file
-					cmd.Stderr = os.Stderr
+					cmd.Stdout = os.Stdout
+					cmd.Stderr = file
 				}
 			} else {
 				cmd = exec.Command(command, rest...)
@@ -115,7 +114,7 @@ func handleInput(input string) {
 				return
 			}
 		} else {
-			fmt.Fprintf(os.Stdout, "%s: command not found\n", command)
+			fmt.Fprintf(os.Stderr, "%s: command not found\n", command)
 		}
 
 	}
