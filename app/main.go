@@ -21,60 +21,59 @@ type BellCompleter struct {
 }
 
 func (b *BellCompleter) Do(line []rune, pos int) ([][]rune, int) {
-	current := string(line[:pos])
+    current := string(line[:pos])
 
-	if current == b.lastLine {
-		b.tabCount++
-	} else {
-		b.tabCount = 1
-		b.lastLine = current
-	}
+    if current == b.lastLine {
+        b.tabCount++
+    } else {
+        b.tabCount = 1
+        b.lastLine = current
+    }
 
-	candidates, length := b.inner.Do(line, pos)
+    candidates, length := b.inner.Do(line, pos)
 
-	if len(candidates) == 0 {
-		tty, _ := os.OpenFile("/dev/tty", os.O_WRONLY, 0)
-		if tty != nil {
-			defer tty.Close()
-			tty.Write([]byte("\a"))
-		}
-		return candidates, length
+    if len(candidates) == 0 {
+        tty, _ := os.OpenFile("/dev/tty", os.O_WRONLY, 0)
+        if tty != nil {
+            defer tty.Close()
+            tty.Write([]byte("\a"))
+        }
+        return candidates, length
 
-	} else if len(candidates) == 1 {
-		// single match — complete with trailing space
-		candidate := strings.TrimRight(string(candidates[0]), " ")
-		withSpace := []rune(candidate + " ")
-		b.tabCount = 0
-		return [][]rune{withSpace}, length
+    } else if len(candidates) == 1 {
+        candidate := strings.TrimRight(string(candidates[0]), " ")
+        withSpace := []rune(candidate + " ")
+        b.tabCount = 0
+        return [][]rune{withSpace}, length
 
-	} else {
-		// second tab — find longest common prefix
-		var names []string
-		for _, c := range candidates {
-			names = append(names, current+string(c))
-		}
-		sort.Strings(names)
+    } else {
+        // multiple matches
+        if b.tabCount == 1 {
+            // first tab — ring bell only
+            tty, _ := os.OpenFile("/dev/tty", os.O_WRONLY, 0)
+            if tty != nil {
+                defer tty.Close()
+                tty.Write([]byte("\a"))
+            }
+            return [][]rune{}, 0
 
-		// find longest common prefix among all matches
-		lcp := names[0]
-		for _, name := range names[1:] {
-			for !strings.HasPrefix(name, lcp) {
-				lcp = lcp[:len(lcp)-1]
-			}
-		}
+        } else {
+            // second tab — print matches and reprint prompt with original input
+            var names []string
+            for _, c := range candidates {
+                names = append(names, current+string(c))
+            }
+            sort.Strings(names)
 
-		// print matches
-		os.Stdout.Write([]byte("\r\n"))
-		os.Stdout.Write([]byte(strings.Join(names, "  ")))
-		os.Stdout.Write([]byte("\r\n"))
-		os.Stdout.Write([]byte("$ " + lcp)) // reprint with lcp instead of current
+            os.Stdout.Write([]byte("\r\n"))
+            os.Stdout.Write([]byte(strings.Join(names, "  ")))
+            os.Stdout.Write([]byte("\r\n"))
+            os.Stdout.Write([]byte("$ " + current)) // keep original prefix
 
-		b.tabCount = 0
-
-		// return the extra characters beyond current input
-		completion := []rune(lcp[len(current):])
-		return [][]rune{completion}, len([]rune(current))
-	}
+            b.tabCount = 0
+            return [][]rune{}, 0 // don't complete, keep current input as is
+        }
+    }
 }
 func main() {
 	builtins := []readline.PrefixCompleterInterface{
