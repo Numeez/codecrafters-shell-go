@@ -53,6 +53,10 @@ func handleInput(input string) {
 	case "cd":
 		path:=rest[0]
 		info,err:=os.Stat(path)
+		if path=="~"{
+			os.Chdir(os.Getenv("HOME"))
+			break
+		}
 		if err!=nil{
 			fmt.Fprintf(os.Stdout, "cd: %s: No such file or directory\n",path)
 		}else if os.IsNotExist(err){
