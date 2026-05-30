@@ -1,26 +1,49 @@
 package main
 
 import (
-	"bufio"
 	"bytes"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+
+	"github.com/chzyer/readline"
 )
 
 var _ = fmt.Print
 
 func main() {
-	scanner := bufio.NewScanner(os.Stdin)
+	completer := readline.NewPrefixCompleter(
+		readline.PcItem("echo"),
+		readline.PcItem("cd"),
+		readline.PcItem("ls"),
+		readline.PcItem("pwd"),
+		readline.PcItem("exit"),
+		readline.PcItem("type"),
+	)
+
+	rl, err := readline.NewEx(&readline.Config{
+		Prompt:          "$ ",
+		AutoComplete:    completer,
+		InterruptPrompt: "^C",
+		EOFPrompt:       "exit",
+	})
+	if err != nil {
+		panic(err)
+	}
+	defer rl.Close()
+
 	for {
-		fmt.Fprint(os.Stdout, "$ ")
-		if !scanner.Scan() {
-			os.Exit(1)
+		line, err := rl.Readline()
+		if err != nil {
+			break
 		}
-		readInput := scanner.Text()
-		handleInput(readInput)
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		handleInput(line)
 
 	}
 }
