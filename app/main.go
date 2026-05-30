@@ -10,11 +10,14 @@ import (
 var _ = fmt.Print
 
 func main() {
-
-	fmt.Print("$ ")
 	scanner := bufio.NewScanner(os.Stdin)
-	for scanner.Scan() {
+	for {
+		fmt.Fprint(os.Stdout, "$ ")
+		if !scanner.Scan() {
+			os.Exit(1)
+		}
 		readInput := scanner.Text()
 		fmt.Fprintf(os.Stdout, "%s: command not found", readInput)
+		fmt.Fprintf(os.Stdout,"\n")
 	}
 }
