@@ -97,8 +97,8 @@ func handleInput(input string) {
 					cmd.Stdout = os.Stdout
 					cmd.Stderr = file
 				} else {
-					cmd.Stdout = os.Stdout
-					cmd.Stderr = file
+					cmd.Stdout = file
+					cmd.Stderr = os.Stderr
 				}
 			} else {
 				cmd = exec.Command(command, rest...)
