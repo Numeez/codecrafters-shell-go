@@ -17,7 +17,19 @@ func main() {
 			os.Exit(1)
 		}
 		readInput := scanner.Text()
-		fmt.Fprintf(os.Stdout, "%s: command not found", readInput)
+		handleInput(readInput)
+		
+	}
+}
+
+
+func handleInput(input string){
+	switch input{
+	case "exit":
+		os.Exit(0)
+	default:
+		fmt.Fprintf(os.Stdout, "%s: command not found", input)
 		fmt.Fprintf(os.Stdout,"\n")
+		
 	}
 }
