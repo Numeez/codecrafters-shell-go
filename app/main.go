@@ -22,15 +22,13 @@ type BellCompleter struct {
 
 func (b *BellCompleter) Do(line []rune, pos int) ([][]rune, int) {
 	current := string(line[:pos])
-
-	if current == b.lastLine {
-    b.tabCount++
-} else {
-    b.tabCount = 1
-    b.lastLine = current
-}
-
 	candidates, length := b.inner.Do(line, pos)
+
+	if len(candidates) <= 1 {
+		// reset tab count when not multiple matches
+		b.tabCount = 0
+		b.lastLine = ""
+	}
 
 	if len(candidates) == 0 {
 		tty, _ := os.OpenFile("/dev/tty", os.O_WRONLY, 0)
@@ -41,28 +39,42 @@ func (b *BellCompleter) Do(line []rune, pos int) ([][]rune, int) {
 		return candidates, length
 
 	} else if len(candidates) == 1 {
-		full := current + string(candidates[0])
-		full = strings.TrimRight(full, " ")
-		suffix := full[len(current):]
-		withSpace := []rune(suffix + " ")
-		b.tabCount = 0
+		candidate := strings.TrimRight(string(candidates[0]), " ")
+		withSpace := []rune(candidate + " ")
 		return [][]rune{withSpace}, length
 
 	} else {
-		  var names []string
-    for _, c := range candidates {
-        name := current + strings.TrimRight(string(c), " ")
-        names = append(names, name)
-    }
-    sort.Strings(names)
+		// multiple matches
+		if current != b.lastLine {
+			// input changed — reset and ring bell
+			b.lastLine = current
+			b.tabCount = 1
+			tty, _ := os.OpenFile("/dev/tty", os.O_WRONLY, 0)
+			if tty != nil {
+				defer tty.Close()
+				tty.Write([]byte("\a"))
+			}
+			return [][]rune{}, 0
+		} else {
+			// same input, second tab — print matches
+			b.tabCount++
+			if b.tabCount == 2 {
+				var names []string
+				for _, c := range candidates {
+					name := current + strings.TrimRight(string(c), " ")
+					names = append(names, name)
+				}
+				sort.Strings(names)
 
-    os.Stdout.Write([]byte("\r\n"))
-    os.Stdout.Write([]byte(strings.Join(names, "  ")))
-    os.Stdout.Write([]byte("\r\n"))
-    os.Stdout.Write([]byte("$ " + current))
+				os.Stdout.Write([]byte("\r\n"))
+				os.Stdout.Write([]byte(strings.Join(names, "  ")))
+				os.Stdout.Write([]byte("\r\n"))
+				os.Stdout.Write([]byte("$ " + current))
 
-    b.tabCount = 0
-    return [][]rune{[]rune("")}, 0
+				b.tabCount = 0
+			}
+			return [][]rune{[]rune("")}, 0
+		}
 	}
 }
 func main() {
