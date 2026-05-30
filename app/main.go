@@ -15,6 +15,6 @@ func main() {
 	scanner := bufio.NewScanner(os.Stdin)
 	for scanner.Scan() {
 		readInput := scanner.Text()
-		fmt.Fprintf(os.Stdout, "{%s}: command not found", readInput)
+		fmt.Fprintf(os.Stdout, "%s: command not found", readInput)
 	}
 }
