@@ -10,7 +10,6 @@ import (
 	"strings"
 )
 
-// Ensures gofmt doesn't remove the "fmt" import in stage 1 (feel free to remove this!)
 var _ = fmt.Print
 
 func main() {
@@ -133,9 +132,7 @@ func makeString(input []string) string {
 	return out.String()
 }
 func handleEcho(input []string) {
-    args := input[1:] // skip "echo"
-
-    // find ">" or "1>" or "2>"
+    args := input[1:] 
     redirectIdx := -1
     redirectType := ""
     for i, arg := range args {
@@ -164,10 +161,8 @@ func handleEcho(input []string) {
         defer file.Close()
 
         if redirectType == "2>" {
-            // echo doesn't write to stderr, so this is a no-op
-            fmt.Fprintf(os.Stdout, "%s\n", content)
+            fmt.Fprintf(file, "%s\n", content)
         } else {
-            // ">" or "1>" — write to file
             _, err = file.WriteString(content + "\n")
             if err != nil {
                 fmt.Fprintf(os.Stderr, "%s\n", err.Error())
