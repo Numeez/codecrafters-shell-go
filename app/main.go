@@ -76,21 +76,42 @@ func handleInput(input string) {
 					redirectType = arg
 					break
 				}
+				if arg == ">>" || arg == "1>>" || arg == "2>>" {
+					redirectIdx = i
+					redirectType = arg
+					break
+				}
+
 			}
 
 			var cmd *exec.Cmd
 			if redirectIdx != -1 {
 				cmdArgs := rest[:redirectIdx]
 				filePath := rest[redirectIdx+1]
-
+				var file *os.File
+				var fileErr error
 				os.MkdirAll(filepath.Dir(filePath), 0755)
+				if redirectType == ">>" || redirectType == ">>1" {
+					_, err := os.Stat(filePath)
+					if err != nil {
+						fmt.Fprintf(os.Stderr, "%s\n", err.Error())
+						return
+					}
+					if os.IsNotExist(err) {
+						file, fileErr = os.Create(filePath)
+					} else {
+						file, fileErr = os.OpenFile(filePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 
-				file, err := os.Create(filePath)
-				if err != nil {
-					fmt.Fprintf(os.Stderr, "%s\n", err.Error())
-					return
+					}
+				} else {
+					file, fileErr = os.Create(filePath)
+
 				}
 				defer file.Close()
+				if fileErr != nil {
+					fmt.Fprintf(os.Stderr, "%s\n", fileErr.Error())
+					return
+				}
 
 				cmd = exec.Command(command, cmdArgs...)
 				if redirectType == "2>" {
@@ -109,7 +130,6 @@ func handleInput(input string) {
 			cmd.Stdin = os.Stdin
 			err := cmd.Run()
 			if err != nil {
-				// fmt.Fprintf(os.Stderr, "%s\n", err.Error())
 				return
 			}
 		} else {
@@ -132,44 +152,66 @@ func makeString(input []string) string {
 	return out.String()
 }
 func handleEcho(input []string) {
-    redirectIdx := -1
-    redirectType := ""
-    for i, arg := range input {
-        if arg == ">" || arg == "1>" || arg == "2>" {
-            redirectIdx = i
-            redirectType = arg
-            break
-        }
-    }
+	redirectIdx := -1
+	redirectType := ""
+	for i, arg := range input {
+		if arg == ">" || arg == "1>" || arg == "2>" {
+			redirectIdx = i
+			redirectType = arg
+			break
+		}
+		if arg == ">>" || arg == "1>>" || arg == "2>>" {
+			redirectIdx = i
+			redirectType = arg
+			break
+		}
+	}
 
-    if redirectIdx != -1 {
-        filePath := input[redirectIdx+1]
-        content := makeStringForEcho(input[:redirectIdx])
+	if redirectIdx != -1 {
+		filePath := input[redirectIdx+1]
+		content := makeStringForEcho(input[:redirectIdx])
+		var file *os.File
+		var fileErr error
+		err := os.MkdirAll(filepath.Dir(filePath), 0755)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "%s\n", err.Error())
+			return
+		}
 
-        err := os.MkdirAll(filepath.Dir(filePath), 0755)
-        if err != nil {
-            fmt.Fprintf(os.Stderr, "%s\n", err.Error())
-            return
-        }
+		if redirectType == ">>" || redirectType == ">>1" {
+			_, err := os.Stat(filePath)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "%s\n", err.Error())
+				return
+			}
+			if os.IsNotExist(err) {
+				file, fileErr = os.Create(filePath)
+			} else {
+				file, fileErr = os.OpenFile(filePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 
-        file, err := os.Create(filePath)
-        if err != nil {
-            fmt.Fprintf(os.Stderr, "%s\n", err.Error())
-            return
-        }
-        defer file.Close()
+			}
+		} else {
+			file, fileErr = os.Create(filePath)
 
-        if redirectType == "2>" {
-            fmt.Fprintf(os.Stdout, "%s\n", content)
-        } else {
-            _, err = file.WriteString(content + "\n")
-            if err != nil {
-                fmt.Fprintf(os.Stderr, "%s\n", err.Error())
-            }
-        }
-    } else {
-        fmt.Fprintf(os.Stdout, "%s\n", makeStringForEcho(input))
-    }
+		}
+		defer file.Close()
+		if fileErr != nil {
+			fmt.Fprintf(os.Stderr, "%s\n", fileErr.Error())
+			return
+		}
+		file.WriteString(fmt.Sprintf("%s\n", makeStringForEcho(input)))
+
+		if redirectType == "2>" {
+			fmt.Fprintf(os.Stdout, "%s\n", content)
+		} else {
+			_, err = file.WriteString(content + "\n")
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "%s\n", err.Error())
+			}
+		}
+	} else {
+		fmt.Fprintf(os.Stdout, "%s\n", makeStringForEcho(input))
+	}
 }
 
 func makeStringForEcho(input []string) string {
