@@ -41,10 +41,13 @@ func (b *BellCompleter) Do(line []rune, pos int) ([][]rune, int) {
         return candidates, length
 
     } else if len(candidates) == 1 {
-        candidate := strings.TrimRight(string(candidates[0]), " ")
-        withSpace := []rune(candidate + " ")
-        b.tabCount = 0
-        return [][]rune{withSpace}, length
+       full := current + string(candidates[0])
+    full = strings.TrimRight(full, " ")
+    // return only the suffix + space, not the full word
+    suffix := full[len(current):]
+    withSpace := []rune(suffix + " ")
+    b.tabCount = 0
+    return [][]rune{withSpace}, length
 
     } else {
         // multiple matches
