@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/chzyer/readline"
@@ -14,19 +15,64 @@ import (
 var _ = fmt.Print
 
 type BellCompleter struct {
-	inner readline.AutoCompleter
+	inner    readline.AutoCompleter
+	lastLine string
+	tabCount int
 }
 
 func (b *BellCompleter) Do(line []rune, pos int) ([][]rune, int) {
+	current := string(line[:pos])
+
+	if current == b.lastLine {
+		b.tabCount++
+	} else {
+		b.tabCount = 1
+		b.lastLine = current
+	}
+
 	candidates, length := b.inner.Do(line, pos)
+
 	if len(candidates) == 0 {
 		tty, err := os.OpenFile("/dev/tty", os.O_WRONLY, 0)
 		if err == nil {
 			defer tty.Close()
 			tty.Write([]byte("\a"))
 		}
+		return candidates, length
 	}
-	return candidates, length
+
+	if len(candidates) == 1 {
+		b.tabCount = 0
+		return candidates, length
+	}
+
+	if b.tabCount == 1 {
+		// first tab — ring bell
+		tty, err := os.OpenFile("/dev/tty", os.O_WRONLY, 0)
+		if err == nil {
+			defer tty.Close()
+			tty.Write([]byte("\a"))
+		}
+		return [][]rune{}, 0 
+
+	} else {
+		var names []string
+		for _, c := range candidates {
+			names = append(names, current+string(c))
+		}
+		sort.Strings(names)
+
+		tty, err := os.OpenFile("/dev/tty", os.O_WRONLY, 0)
+		if err == nil {
+			defer tty.Close()
+			tty.Write([]byte("\r\n"))
+			tty.Write([]byte(strings.Join(names, "  ")))
+			tty.Write([]byte("\r\n"))
+		}
+
+		b.tabCount = 0
+		return [][]rune{}, 0 
+	}
 }
 func main() {
 	builtins := []readline.PrefixCompleterInterface{
