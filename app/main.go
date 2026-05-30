@@ -132,10 +132,9 @@ func makeString(input []string) string {
 	return out.String()
 }
 func handleEcho(input []string) {
-    args := input[1:] 
     redirectIdx := -1
     redirectType := ""
-    for i, arg := range args {
+    for i, arg := range input {
         if arg == ">" || arg == "1>" || arg == "2>" {
             redirectIdx = i
             redirectType = arg
@@ -144,8 +143,8 @@ func handleEcho(input []string) {
     }
 
     if redirectIdx != -1 {
-        filePath := args[redirectIdx+1]
-        content := makeStringForEcho(args[:redirectIdx])
+        filePath := input[redirectIdx+1]
+        content := makeStringForEcho(input[:redirectIdx])
 
         err := os.MkdirAll(filepath.Dir(filePath), 0755)
         if err != nil {
@@ -169,7 +168,7 @@ func handleEcho(input []string) {
             }
         }
     } else {
-        fmt.Fprintf(os.Stdout, "%s\n", makeStringForEcho(args))
+        fmt.Fprintf(os.Stdout, "%s\n", makeStringForEcho(input))
     }
 }
 
