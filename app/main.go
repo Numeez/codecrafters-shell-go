@@ -69,11 +69,13 @@ func handleInput(input string) {
 	default:
 		commandFound, _, _ := commandExists(command)
 		if commandFound {
-			// find redirect in args
+			// find ">" or "1>" or "2>" in args
 			redirectIdx := -1
+			redirectType := ""
 			for i, arg := range rest {
-				if arg == ">" {
+				if arg == ">" || arg == "1>" || arg == "2>" {
 					redirectIdx = i
+					redirectType = arg
 					break
 				}
 			}
@@ -93,12 +95,19 @@ func handleInput(input string) {
 				defer file.Close()
 
 				cmd = exec.Command(command, cmdArgs...)
-				cmd.Stdout = file
+				if redirectType == "2>" {
+					cmd.Stdout = os.Stdout
+					cmd.Stderr = file // only stderr to file
+				} else {
+					cmd.Stdout = file // stdout (or 1>) to file
+					cmd.Stderr = os.Stderr
+				}
 			} else {
 				cmd = exec.Command(command, rest...)
 				cmd.Stdout = os.Stdout
+				cmd.Stderr = os.Stderr
 			}
-			cmd.Stderr = os.Stderr
+
 			cmd.Stdin = os.Stdin
 			err := cmd.Run()
 			if err != nil {
