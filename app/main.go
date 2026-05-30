@@ -42,8 +42,10 @@ func (b *BellCompleter) Do(line []rune, pos int) ([][]rune, int) {
 	}
 
 	if len(candidates) == 1 {
+
+		withSpace := append(candidates[0], ' ')
 		b.tabCount = 0
-		return candidates, length
+		return [][]rune{withSpace}, length
 	}
 
 	if b.tabCount == 1 {
@@ -53,27 +55,27 @@ func (b *BellCompleter) Do(line []rune, pos int) ([][]rune, int) {
 			defer tty.Close()
 			tty.Write([]byte("\a"))
 		}
-		return [][]rune{}, 0 
+		return [][]rune{}, 0
 
 	} else {
 		var names []string
-    for _, c := range candidates {
-        names = append(names, current+string(c))
-    }
-    sort.Strings(names)
+		for _, c := range candidates {
+			names = append(names, current+string(c))
+		}
+		sort.Strings(names)
 
-    tty, err := os.OpenFile("/dev/tty", os.O_WRONLY, 0)
-    if err == nil {
-        defer tty.Close()
-        tty.Write([]byte("\r\n"))
-        tty.Write([]byte(strings.Join(names, "  ")))
-        tty.Write([]byte("\r\n"))
-        // reprint prompt and current input
-        tty.Write([]byte("$ " + current))
-    }
+		tty, err := os.OpenFile("/dev/tty", os.O_WRONLY, 0)
+		if err == nil {
+			defer tty.Close()
+			tty.Write([]byte("\r\n"))
+			tty.Write([]byte(strings.Join(names, "  ")))
+			tty.Write([]byte("\r\n"))
+			// reprint prompt and current input
+			tty.Write([]byte("$ " + current))
+		}
 
-    b.tabCount = 0
-    return [][]rune{}, 0
+		b.tabCount = 0
+		return [][]rune{}, 0
 	}
 }
 func main() {
