@@ -34,7 +34,7 @@ func handleInput(input string) {
 	case "exit":
 		os.Exit(0)
 	case "echo":
-		fmt.Fprintf(os.Stdout, "%s\n", makeStringForEcho(rest))
+		handleEcho(rest)
 	case "type":
 		typeCommand(makeString(rest))
 	case "pwd":
@@ -97,6 +97,30 @@ func makeString(input []string) string {
 	}
 	return out.String()
 }
+func handleEcho(input []string) {
+    length := len(input)
+
+    // check if second-to-last element is ">"
+    if length >= 3 && input[length-2] == ">" {
+        fileName := input[length-1]              // file is the last element
+        content := makeStringForEcho(input[:length-2]) // everything before ">"
+
+        file, err := os.Create(fileName)
+        if err != nil {
+            fmt.Fprintf(os.Stderr, "%s\n", err.Error())
+            return
+        }
+        defer file.Close()
+
+        _, err = file.WriteString(content + "\n")
+        if err != nil {
+            fmt.Fprintf(os.Stderr, "%s\n", err.Error())
+            return
+        }
+    } else {
+        fmt.Fprintf(os.Stdout, "%s\n", makeStringForEcho(input))
+    }
+}
 
 func makeStringForEcho(input []string) string {
 	var out bytes.Buffer
@@ -124,69 +148,69 @@ func makeStringForEcho(input []string) string {
 }
 
 func parseArgs(input string) []string {
-    var args []string
-    var current strings.Builder
-    inSingleQuote := false
-    inDoubleQuote := false
+	var args []string
+	var current strings.Builder
+	inSingleQuote := false
+	inDoubleQuote := false
 
-    for i := 0; i < len(input); i++ {
-        ch := input[i]
-        switch {
+	for i := 0; i < len(input); i++ {
+		ch := input[i]
+		switch {
 
-        // --- single quote ---
-        case ch == '\'' && !inSingleQuote && !inDoubleQuote:
-            inSingleQuote = true
+		// --- single quote ---
+		case ch == '\'' && !inSingleQuote && !inDoubleQuote:
+			inSingleQuote = true
 
-        case ch == '\'' && inSingleQuote:
-            inSingleQuote = false
+		case ch == '\'' && inSingleQuote:
+			inSingleQuote = false
 
-        // --- double quote ---
-        case ch == '"' && !inDoubleQuote && !inSingleQuote:
-            inDoubleQuote = true
+		// --- double quote ---
+		case ch == '"' && !inDoubleQuote && !inSingleQuote:
+			inDoubleQuote = true
 
-        case ch == '"' && inDoubleQuote:
-            inDoubleQuote = false
+		case ch == '"' && inDoubleQuote:
+			inDoubleQuote = false
 
-        // --- backslash outside quotes ---
-        case ch == '\\' && !inSingleQuote && !inDoubleQuote:
-            i++
-            if i < len(input) {
-                current.WriteByte(input[i])
-            }
+		// --- backslash outside quotes ---
+		case ch == '\\' && !inSingleQuote && !inDoubleQuote:
+			i++
+			if i < len(input) {
+				current.WriteByte(input[i])
+			}
 
-        // --- backslash inside double quotes ---
-        // only escapes special characters
-        case ch == '\\' && inDoubleQuote:
-            if i+1 < len(input) {
-                next := input[i+1]
-                if next == '"' || next == '\\' || next == '$' || next == '`' || next == '\n' {
-                    i++
-                    current.WriteByte(input[i])
-                } else {
-                    current.WriteByte(ch) // literal backslash
-                }
-            }
+		// --- backslash inside double quotes ---
+		// only escapes special characters
+		case ch == '\\' && inDoubleQuote:
+			if i+1 < len(input) {
+				next := input[i+1]
+				if next == '"' || next == '\\' || next == '$' || next == '`' || next == '\n' {
+					i++
+					current.WriteByte(input[i])
+				} else {
+					current.WriteByte(ch) // literal backslash
+				}
+			}
 
-        // --- backslash inside single quotes ---
-        // always literal, handled by default (no case needed)
+		// --- backslash inside single quotes ---
+		// always literal, handled by default (no case needed)
 
-        // --- space ---
-        case ch == ' ' && !inSingleQuote && !inDoubleQuote:
-            if current.Len() > 0 {
-                args = append(args, current.String())
-                current.Reset()
-            }
+		// --- space ---
+		case ch == ' ' && !inSingleQuote && !inDoubleQuote:
+			if current.Len() > 0 {
+				args = append(args, current.String())
+				current.Reset()
+			}
 
-        default:
-            current.WriteByte(ch)
-        }
-    }
+		default:
+			current.WriteByte(ch)
+		}
+	}
 
-    if current.Len() > 0 {
-        args = append(args, current.String())
-    }
+	if current.Len() > 0 {
+		args = append(args, current.String())
+	}
 
-    return args
+	return args
 }
 
 func typeCommand(command string) {
