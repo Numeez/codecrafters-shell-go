@@ -48,29 +48,32 @@ func (b *BellCompleter) Do(line []rune, pos int) ([][]rune, int) {
 		return [][]rune{withSpace}, length
 
 	} else {
-		// multiple matches
-		if b.tabCount == 1 {
-			tty, _ := os.OpenFile("/dev/tty", os.O_WRONLY, 0)
-			if tty != nil {
-				defer tty.Close()
-				tty.Write([]byte("\a"))
-			}
-			return [][]rune{}, 0
-		} else {
-			var names []string
-			for _, c := range candidates {
-				names = append(names, current+string(c))
-			}
-			sort.Strings(names)
-
-			os.Stdout.Write([]byte("\r\n"))
-			os.Stdout.Write([]byte(strings.Join(names, "  ")))
-			os.Stdout.Write([]byte("\r\n"))
-			os.Stdout.Write([]byte("$ " + current))
-
-			b.tabCount = 0
-			return [][]rune{}, 0
+		// second tab — find longest common prefix
+		var names []string
+		for _, c := range candidates {
+			names = append(names, current+string(c))
 		}
+		sort.Strings(names)
+
+		// find longest common prefix among all matches
+		lcp := names[0]
+		for _, name := range names[1:] {
+			for !strings.HasPrefix(name, lcp) {
+				lcp = lcp[:len(lcp)-1]
+			}
+		}
+
+		// print matches
+		os.Stdout.Write([]byte("\r\n"))
+		os.Stdout.Write([]byte(strings.Join(names, "  ")))
+		os.Stdout.Write([]byte("\r\n"))
+		os.Stdout.Write([]byte("$ " + lcp)) // reprint with lcp instead of current
+
+		b.tabCount = 0
+
+		// return the extra characters beyond current input
+		completion := []rune(lcp[len(current):])
+		return [][]rune{completion}, len([]rune(current))
 	}
 }
 func main() {
