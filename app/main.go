@@ -124,38 +124,42 @@ func makeStringForEcho(input []string) string {
 }
 
 func parseArgs(input string) []string {
-	var args []string
-	var current strings.Builder
-	inSingleQuote := false
+    var args []string
+    var current strings.Builder
+    inSingleQuote := false
+    inDoubleQuote := false
 
-	for i := 0; i < len(input); i++ {
-		ch := input[i]
+    for i := 0; i < len(input); i++ {
+        ch := input[i]
+        switch {
+        case ch == '\'' && !inSingleQuote && !inDoubleQuote:
+            inSingleQuote = true
 
-		switch {
-		case ch == '\'' && !inSingleQuote:
-			inSingleQuote = true // enter single quote mode
+        case ch == '\'' && inSingleQuote:
+            inSingleQuote = false
 
-		case ch == '\'' && inSingleQuote:
-			inSingleQuote = false // exit single quote mode
+        case ch == '"' && !inDoubleQuote && !inSingleQuote:
+            inDoubleQuote = true
 
-		case ch == ' ' && !inSingleQuote:
-			// space outside quotes = argument boundary
-			if current.Len() > 0 {
-				args = append(args, current.String())
-				current.Reset()
-			}
+        case ch == '"' && inDoubleQuote:
+            inDoubleQuote = false
 
-		default:
-			current.WriteByte(ch)
-		}
-	}
+        case ch == ' ' && !inSingleQuote && !inDoubleQuote:
+            if current.Len() > 0 {
+                args = append(args, current.String())
+                current.Reset()
+            }
 
-	// don't forget the last argument
-	if current.Len() > 0 {
-		args = append(args, current.String())
-	}
+        default:
+            current.WriteByte(ch)
+        }
+    }
 
-	return args
+    if current.Len() > 0 {
+        args = append(args, current.String())
+    }
+
+    return args
 }
 
 func processQuotes(input string) string {
