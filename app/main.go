@@ -42,11 +42,11 @@ func (b *BellCompleter) Do(line []rune, pos int) ([][]rune, int) {
 	}
 
 	if len(candidates) == 1 {
-
-		withSpace := append(candidates[0], ' ')
-		b.tabCount = 0
-		return [][]rune{withSpace}, length
-	}
+    candidate := strings.TrimRight(string(candidates[0]), " ") 
+    withSpace := []rune(candidate + " ")
+    b.tabCount = 0
+    return [][]rune{withSpace}, length
+}
 
 	if b.tabCount == 1 {
 
