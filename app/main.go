@@ -47,7 +47,7 @@ func (b *BellCompleter) Do(line []rune, pos int) ([][]rune, int) {
 	}
 
 	if b.tabCount == 1 {
-		// first tab — ring bell
+
 		tty, err := os.OpenFile("/dev/tty", os.O_WRONLY, 0)
 		if err == nil {
 			defer tty.Close()
@@ -57,21 +57,23 @@ func (b *BellCompleter) Do(line []rune, pos int) ([][]rune, int) {
 
 	} else {
 		var names []string
-		for _, c := range candidates {
-			names = append(names, current+string(c))
-		}
-		sort.Strings(names)
+    for _, c := range candidates {
+        names = append(names, current+string(c))
+    }
+    sort.Strings(names)
 
-		tty, err := os.OpenFile("/dev/tty", os.O_WRONLY, 0)
-		if err == nil {
-			defer tty.Close()
-			tty.Write([]byte("\r\n"))
-			tty.Write([]byte(strings.Join(names, "  ")))
-			tty.Write([]byte("\r\n"))
-		}
+    tty, err := os.OpenFile("/dev/tty", os.O_WRONLY, 0)
+    if err == nil {
+        defer tty.Close()
+        tty.Write([]byte("\r\n"))
+        tty.Write([]byte(strings.Join(names, "  ")))
+        tty.Write([]byte("\r\n"))
+        // reprint prompt and current input
+        tty.Write([]byte("$ " + current))
+    }
 
-		b.tabCount = 0
-		return [][]rune{}, 0 
+    b.tabCount = 0
+    return [][]rune{}, 0
 	}
 }
 func main() {
