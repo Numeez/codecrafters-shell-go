@@ -20,76 +20,6 @@ type BellCompleter struct {
 	tabCount int
 }
 
-func (b *BellCompleter) Do(line []rune, pos int) ([][]rune, int) {
-	current := string(line[:pos])
-	candidates, length := b.inner.Do(line, pos)
-
-	// Deduplicate candidates
-	seen := map[string]bool{}
-	var unique []string
-	for _, c := range candidates {
-		s := strings.TrimRight(string(c), " ")
-		if !seen[s] {
-			seen[s] = true
-			unique = append(unique, s)
-		}
-	}
-
-	switch len(unique) {
-	case 0:
-		// No match — ring bell
-		tty, _ := os.OpenFile("/dev/tty", os.O_WRONLY, 0)
-		if tty != nil {
-			defer tty.Close()
-			tty.Write([]byte("\a"))
-		}
-		return [][]rune{}, 0
-
-	case 1:
-		// Single match — complete with trailing space
-		return [][]rune{[]rune(unique[0] + " ")}, length
-
-	default:
-		// Multiple matches — find LCP of the suffixes
-		lcp := longestCommonPrefix(unique)
-
-		if lcp == "" || lcp == strings.TrimRight(string(candidates[0]), " ") {
-			// LCP adds nothing new — bell on first tab, show options on second
-			if current != b.lastLine {
-				b.lastLine = current
-				b.tabCount = 1
-				tty, _ := os.OpenFile("/dev/tty", os.O_WRONLY, 0)
-				if tty != nil {
-					defer tty.Close()
-					tty.Write([]byte("\a"))
-				}
-				return [][]rune{}, 0
-			}
-			b.tabCount++
-			if b.tabCount == 2 {
-				matchedPrefix := current[len(current)-length:] // e.g. "xyz_"
-				staticPrefix := current[:len(current)-length]  // e.g. "" (nothing before)
-				var names []string
-				for _, s := range unique {
-					names = append(names, staticPrefix+matchedPrefix+s)
-				}
-				sort.Strings(names)
-				os.Stdout.Write([]byte("\r\n"))
-				os.Stdout.Write([]byte(strings.Join(names, "  ")))
-				os.Stdout.Write([]byte("\r\n"))
-				os.Stdout.Write([]byte("$ " + current))
-				b.tabCount = 0
-			}
-			return [][]rune{[]rune("")}, 0
-		}
-
-		// LCP is longer than what's typed — complete to LCP
-		b.lastLine = ""
-		b.tabCount = 0
-		return [][]rune{[]rune(lcp + "")}, length
-	}
-}
-
 func longestCommonPrefix(strs []string) string {
 	if len(strs) == 0 {
 		return ""
@@ -105,7 +35,166 @@ func longestCommonPrefix(strs []string) string {
 	}
 	return prefix
 }
+
+func getFileCompletions(prefix string) []string {
+	var dir, base string
+
+	if strings.Contains(prefix, "/") {
+		if strings.HasSuffix(prefix, "/") {
+			dir = prefix
+			base = ""
+		} else {
+			dir = filepath.Dir(prefix)
+			base = filepath.Base(prefix)
+		}
+	} else {
+		dir = "."
+		base = prefix
+	}
+
+	if strings.HasPrefix(dir, "~") {
+		dir = strings.Replace(dir, "~", os.Getenv("HOME"), 1)
+	}
+
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil
+	}
+
+	var matches []string
+	for _, entry := range entries {
+		name := entry.Name()
+		if strings.HasPrefix(name, base) {
+			var full string
+			if dir == "." {
+				full = name
+			} else {
+				full = filepath.Join(dir, name)
+			}
+			if entry.IsDir() {
+				full += "/"
+			}
+			matches = append(matches, full)
+		}
+	}
+	return matches
+}
+
+func (b *BellCompleter) Do(line []rune, pos int) ([][]rune, int) {
+	current := string(line[:pos])
+
+	// Determine the last word being typed
+	parts := strings.Fields(current)
+	lastWord := ""
+	if len(parts) > 0 {
+		lastWord = parts[len(parts)-1]
+	}
+	if strings.HasSuffix(current, " ") {
+		lastWord = ""
+	}
+
+	// Get PATH/builtin candidates from inner completer
+	candidates, length := b.inner.Do(line, pos)
+
+	seen := map[string]bool{}
+	var unique []string
+
+	for _, c := range candidates {
+		s := strings.TrimRight(string(c), " ")
+		if !seen[s] {
+			seen[s] = true
+			unique = append(unique, s)
+		}
+	}
+
+	// Also get file completions from current dir (or path)
+	if lastWord != "" {
+		fileMatches := getFileCompletions(lastWord)
+		for _, m := range fileMatches {
+			// m is the full name e.g. "main.go"
+			// convert to suffix by stripping already-typed prefix
+			if len(m) >= len(lastWord) {
+				suffix := m[len(lastWord):]
+				if !seen[suffix] {
+					seen[suffix] = true
+					unique = append(unique, suffix)
+				}
+			}
+		}
+		// length should cover the lastWord so readline replaces it correctly
+		length = len([]rune(lastWord))
+	}
+
+	switch len(unique) {
+	case 0:
+		// No match — ring bell
+		b.lastLine = ""
+		b.tabCount = 0
+		tty, _ := os.OpenFile("/dev/tty", os.O_WRONLY, 0)
+		if tty != nil {
+			defer tty.Close()
+			tty.Write([]byte("\a"))
+		}
+		return [][]rune{}, 0
+
+	case 1:
+		// Single match — complete with trailing space (or / if directory)
+		b.lastLine = ""
+		b.tabCount = 0
+		suffix := unique[0]
+		fullName := lastWord + suffix
+		if strings.HasSuffix(fullName, "/") {
+			// directory — no trailing space
+			return [][]rune{[]rune(suffix)}, length
+		}
+		return [][]rune{[]rune(suffix + " ")}, length
+
+	default:
+		// Multiple matches — compute LCP of suffixes
+		lcp := longestCommonPrefix(unique)
+
+		if lcp != "" {
+			// LCP adds something — complete to it silently
+			b.lastLine = ""
+			b.tabCount = 0
+			return [][]rune{[]rune(lcp)}, length
+		}
+
+		// LCP adds nothing — bell on first tab, show options on second
+		if current != b.lastLine {
+			b.lastLine = current
+			b.tabCount = 1
+			tty, _ := os.OpenFile("/dev/tty", os.O_WRONLY, 0)
+			if tty != nil {
+				defer tty.Close()
+				tty.Write([]byte("\a"))
+			}
+			return [][]rune{}, 0
+		}
+
+		b.tabCount++
+		if b.tabCount == 2 {
+			// Reconstruct full names for display
+			var names []string
+			for _, s := range unique {
+				names = append(names, lastWord+s)
+			}
+			sort.Strings(names)
+			os.Stdout.Write([]byte("\r\n"))
+			os.Stdout.Write([]byte(strings.Join(names, "  ")))
+			os.Stdout.Write([]byte("\r\n"))
+			os.Stdout.Write([]byte("$ " + current))
+			b.tabCount = 0
+		}
+		return [][]rune{[]rune("")}, 0
+	}
+}
+
 func main() {
+	builtinNames := map[string]bool{
+		"echo": true, "cd": true, "pwd": true, "exit": true, "type": true,
+	}
+
 	builtins := []readline.PrefixCompleterInterface{
 		readline.PcItem("echo"),
 		readline.PcItem("cd"),
@@ -114,12 +203,9 @@ func main() {
 		readline.PcItem("type"),
 	}
 
-	// combine builtins + PATH commands
-	allItems := append(builtins, getPathCommands()...)
+	allItems := append(builtins, getPathCommands(builtinNames)...)
 	completer := &BellCompleter{
-		inner: readline.NewPrefixCompleter(
-			allItems...,
-		),
+		inner: readline.NewPrefixCompleter(allItems...),
 	}
 
 	rl, err := readline.NewEx(&readline.Config{
@@ -144,7 +230,6 @@ func main() {
 			continue
 		}
 		handleInput(line)
-
 	}
 }
 
@@ -170,14 +255,12 @@ func handleInput(input string) {
 		return
 	case "cd":
 		path := rest[0]
-		info, err := os.Stat(path)
 		if path == "~" {
 			os.Chdir(os.Getenv("HOME"))
 			break
 		}
+		info, err := os.Stat(path)
 		if err != nil {
-			fmt.Fprintf(os.Stdout, "cd: %s: No such file or directory\n", path)
-		} else if os.IsNotExist(err) {
 			fmt.Fprintf(os.Stdout, "cd: %s: No such file or directory\n", path)
 		} else if !info.IsDir() {
 			fmt.Fprintf(os.Stdout, "cd: %s: No such file or directory\n", path)
@@ -187,10 +270,8 @@ func handleInput(input string) {
 				fmt.Fprintf(os.Stdout, "%s\n", err.Error())
 			}
 		}
-
 	default:
 		handleCommand(command, rest)
-
 	}
 }
 
@@ -206,8 +287,8 @@ func makeString(input []string) string {
 	}
 	return out.String()
 }
-func handleEcho(input []string) {
 
+func handleEcho(input []string) {
 	redirectIdx := -1
 	redirectType := ""
 	for i, arg := range input {
@@ -221,7 +302,7 @@ func handleEcho(input []string) {
 
 	if redirectIdx != -1 {
 		filePath := input[redirectIdx+1]
-		content := makeStringForEcho(input[:redirectIdx])
+		content := makeString(input[:redirectIdx])
 
 		err := os.MkdirAll(filepath.Dir(filePath), 0755)
 		if err != nil {
@@ -231,10 +312,8 @@ func handleEcho(input []string) {
 
 		var file *os.File
 		if redirectType == ">>" || redirectType == "1>>" {
-			// append mode — O_CREATE handles file not existing
 			file, err = os.OpenFile(filePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 		} else {
-			// truncate mode
 			file, err = os.Create(filePath)
 		}
 		if err != nil {
@@ -246,38 +325,11 @@ func handleEcho(input []string) {
 		if redirectType == "2>" || redirectType == "2>>" {
 			fmt.Fprintf(os.Stdout, "%s\n", content)
 		} else {
-			_, err = file.WriteString(content + "\n")
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "%s\n", err.Error())
-			}
+			file.WriteString(content + "\n")
 		}
 	} else {
-		fmt.Fprintf(os.Stdout, "%s\n", makeStringForEcho(input))
+		fmt.Fprintf(os.Stdout, "%s\n", makeString(input))
 	}
-}
-func makeStringForEcho(input []string) string {
-	var out bytes.Buffer
-	for i, str := range input {
-		if i == len(input)-1 {
-			out.WriteString(str)
-		} else {
-			out.WriteString(str)
-			out.WriteString(" ")
-		}
-	}
-	rawInput := out.String()
-	args := parseArgs(rawInput)
-	var result bytes.Buffer
-	for i, str := range args {
-		if i == len(input)-1 {
-			result.WriteString(str)
-		} else {
-			result.WriteString(str)
-			result.WriteString(" ")
-		}
-	}
-	return out.String()
-
 }
 
 func parseArgs(input string) []string {
@@ -289,30 +341,19 @@ func parseArgs(input string) []string {
 	for i := 0; i < len(input); i++ {
 		ch := input[i]
 		switch {
-
-		// --- single quote ---
 		case ch == '\'' && !inSingleQuote && !inDoubleQuote:
 			inSingleQuote = true
-
 		case ch == '\'' && inSingleQuote:
 			inSingleQuote = false
-
-		// --- double quote ---
 		case ch == '"' && !inDoubleQuote && !inSingleQuote:
 			inDoubleQuote = true
-
 		case ch == '"' && inDoubleQuote:
 			inDoubleQuote = false
-
-		// --- backslash outside quotes ---
 		case ch == '\\' && !inSingleQuote && !inDoubleQuote:
 			i++
 			if i < len(input) {
 				current.WriteByte(input[i])
 			}
-
-		// --- backslash inside double quotes ---
-		// only escapes special characters
 		case ch == '\\' && inDoubleQuote:
 			if i+1 < len(input) {
 				next := input[i+1]
@@ -320,20 +361,14 @@ func parseArgs(input string) []string {
 					i++
 					current.WriteByte(input[i])
 				} else {
-					current.WriteByte(ch) // literal backslash
+					current.WriteByte(ch)
 				}
 			}
-
-		// --- backslash inside single quotes ---
-		// always literal, handled by default (no case needed)
-
-		// --- space ---
 		case ch == ' ' && !inSingleQuote && !inDoubleQuote:
 			if current.Len() > 0 {
 				args = append(args, current.String())
 				current.Reset()
 			}
-
 		default:
 			current.WriteByte(ch)
 		}
@@ -358,13 +393,10 @@ func typeCommand(command string) {
 			fmt.Fprintf(os.Stdout, "%s is %s/%s\n", command, dir, file)
 		}
 	}
-
 }
 
 func commandExists(command string) (bool, string, string) {
-	commandFound := false
 	directories := strings.Split(os.Getenv("PATH"), ":")
-
 	for _, dir := range directories {
 		entries, err := os.ReadDir(dir)
 		if err != nil {
@@ -377,15 +409,12 @@ func commandExists(command string) (bool, string, string) {
 					continue
 				}
 				if info.Mode()&0111 != 0 {
-					commandFound = true
 					return true, dir, entry.Name()
 				}
-			} else {
-				continue
 			}
 		}
 	}
-	return commandFound, "", ""
+	return false, "", ""
 }
 
 func handleCommand(command string, rest []string) {
@@ -395,7 +424,6 @@ func handleCommand(command string, rest []string) {
 		return
 	}
 
-	// find redirect
 	redirectIdx := -1
 	redirectType := ""
 	for i, arg := range rest {
@@ -421,7 +449,6 @@ func handleCommand(command string, rest []string) {
 
 		var file *os.File
 		if redirectType == ">>" || redirectType == "1>>" || redirectType == "2>>" {
-			// O_CREATE handles file not existing — no need for os.Stat
 			file, err = os.OpenFile(filePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 		} else {
 			file, err = os.Create(filePath)
@@ -453,14 +480,9 @@ func handleCommand(command string, rest []string) {
 	}
 }
 
-func getPathCommands() []readline.PrefixCompleterInterface {
+func getPathCommands(builtinNames map[string]bool) []readline.PrefixCompleterInterface {
 	var items []readline.PrefixCompleterInterface
-
-	builtinNames := map[string]bool{
-		"echo": true, "cd": true, "pwd": true, "exit": true, "type": true,
-	}
 	seen := make(map[string]bool)
-	// seed seen with builtins so PATH doesn't re-add them
 	for name := range builtinNames {
 		seen[name] = true
 	}
