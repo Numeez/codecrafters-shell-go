@@ -23,54 +23,87 @@ type BellCompleter struct {
 func (b *BellCompleter) Do(line []rune, pos int) ([][]rune, int) {
 	current := string(line[:pos])
 	candidates, length := b.inner.Do(line, pos)
-	if len(candidates) <= 1 {
-		b.tabCount = 0
-		b.lastLine = ""
+
+	// Deduplicate candidates
+	seen := map[string]bool{}
+	var unique []string
+	for _, c := range candidates {
+		s := strings.TrimRight(string(c), " ")
+		if !seen[s] {
+			seen[s] = true
+			unique = append(unique, s)
+		}
 	}
 
-	if len(candidates) == 0 {
+	switch len(unique) {
+	case 0:
+		// No match — ring bell
 		tty, _ := os.OpenFile("/dev/tty", os.O_WRONLY, 0)
 		if tty != nil {
 			defer tty.Close()
 			tty.Write([]byte("\a"))
 		}
-		return candidates, length
+		return [][]rune{}, 0
 
-	} else if len(candidates) == 1 {
-		suffix := strings.TrimRight(string(candidates[0]), " ")
-		return [][]rune{[]rune(suffix + " ")}, length
-	} else {
-		if current != b.lastLine {
+	case 1:
+		// Single match — complete with trailing space
+		return [][]rune{[]rune(unique[0] + " ")}, length
 
-			b.lastLine = current
-			b.tabCount = 1
-			tty, _ := os.OpenFile("/dev/tty", os.O_WRONLY, 0)
-			if tty != nil {
-				defer tty.Close()
-				tty.Write([]byte("\a"))
+	default:
+		// Multiple matches — find LCP of the suffixes
+		lcp := longestCommonPrefix(unique)
+
+		if lcp == "" || lcp == strings.TrimRight(string(candidates[0]), " ") {
+			// LCP adds nothing new — bell on first tab, show options on second
+			if current != b.lastLine {
+				b.lastLine = current
+				b.tabCount = 1
+				tty, _ := os.OpenFile("/dev/tty", os.O_WRONLY, 0)
+				if tty != nil {
+					defer tty.Close()
+					tty.Write([]byte("\a"))
+				}
+				return [][]rune{}, 0
 			}
-			return [][]rune{}, 0
-		} else {
-
 			b.tabCount++
 			if b.tabCount == 2 {
+				// Reconstruct full names and display
+				prefix := current[:len(current)-length]
 				var names []string
-				for _, c := range candidates {
-					name := current + strings.TrimRight(string(c), " ")
-					names = append(names, name)
+				for _, s := range unique {
+					names = append(names, prefix+s)
 				}
 				sort.Strings(names)
-
 				os.Stdout.Write([]byte("\r\n"))
 				os.Stdout.Write([]byte(strings.Join(names, "  ")))
 				os.Stdout.Write([]byte("\r\n"))
-				os.Stdout.Write([]byte("$ " + names[0]))
-
+				os.Stdout.Write([]byte("$ " + current))
 				b.tabCount = 0
 			}
 			return [][]rune{[]rune("")}, 0
 		}
+
+		// LCP is longer than what's typed — complete to LCP
+		b.lastLine = ""
+		b.tabCount = 0
+		return [][]rune{[]rune(lcp + "")}, length
 	}
+}
+
+func longestCommonPrefix(strs []string) string {
+	if len(strs) == 0 {
+		return ""
+	}
+	prefix := strs[0]
+	for _, s := range strs[1:] {
+		for !strings.HasPrefix(s, prefix) {
+			prefix = prefix[:len(prefix)-1]
+			if prefix == "" {
+				return ""
+			}
+		}
+	}
+	return prefix
 }
 func main() {
 	builtins := []readline.PrefixCompleterInterface{
