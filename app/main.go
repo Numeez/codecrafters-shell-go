@@ -83,7 +83,6 @@ func getFileCompletions(prefix string) []string {
 func (b *BellCompleter) Do(line []rune, pos int) ([][]rune, int) {
 	current := string(line[:pos])
 
-	// Determine the last word being typed
 	parts := strings.Fields(current)
 	lastWord := ""
 	if len(parts) > 0 {
@@ -93,26 +92,17 @@ func (b *BellCompleter) Do(line []rune, pos int) ([][]rune, int) {
 		lastWord = ""
 	}
 
-	// Get PATH/builtin candidates from inner completer
-	candidates, length := b.inner.Do(line, pos)
+	isArg := len(parts) > 1 || strings.HasSuffix(current, " ")
+	isPathLike := strings.Contains(lastWord, "/")
 
-	seen := map[string]bool{}
 	var unique []string
+	seen := map[string]bool{}
+	length := len([]rune(lastWord))
 
-	for _, c := range candidates {
-		s := strings.TrimRight(string(c), " ")
-		if !seen[s] {
-			seen[s] = true
-			unique = append(unique, s)
-		}
-	}
-
-	// Also get file completions from current dir (or path)
-	if lastWord != "" {
+	if isPathLike || isArg {
+		// skip inner completer, only do file completion
 		fileMatches := getFileCompletions(lastWord)
 		for _, m := range fileMatches {
-			// m is the full name e.g. "main.go"
-			// convert to suffix by stripping already-typed prefix
 			if len(m) >= len(lastWord) {
 				suffix := m[len(lastWord):]
 				if !seen[suffix] {
@@ -121,13 +111,33 @@ func (b *BellCompleter) Do(line []rune, pos int) ([][]rune, int) {
 				}
 			}
 		}
-		// length should cover the lastWord so readline replaces it correctly
-		length = len([]rune(lastWord))
+	} else {
+		// command position, no slash — merge PATH + file completions
+		candidates, l := b.inner.Do(line, pos)
+		length = l
+		for _, c := range candidates {
+			s := strings.TrimRight(string(c), " ")
+			if !seen[s] {
+				seen[s] = true
+				unique = append(unique, s)
+			}
+		}
+		// also check current dir
+		fileMatches := getFileCompletions(lastWord)
+		for _, m := range fileMatches {
+			if len(m) >= len(lastWord) {
+				suffix := m[len(lastWord):]
+				if !seen[suffix] {
+					seen[suffix] = true
+					unique = append(unique, suffix)
+					length = len([]rune(lastWord))
+				}
+			}
+		}
 	}
 
 	switch len(unique) {
 	case 0:
-		// No match — ring bell
 		b.lastLine = ""
 		b.tabCount = 0
 		tty, _ := os.OpenFile("/dev/tty", os.O_WRONLY, 0)
@@ -138,29 +148,23 @@ func (b *BellCompleter) Do(line []rune, pos int) ([][]rune, int) {
 		return [][]rune{}, 0
 
 	case 1:
-		// Single match — complete with trailing space (or / if directory)
 		b.lastLine = ""
 		b.tabCount = 0
 		suffix := unique[0]
 		fullName := lastWord + suffix
 		if strings.HasSuffix(fullName, "/") {
-			// directory — no trailing space
 			return [][]rune{[]rune(suffix)}, length
 		}
 		return [][]rune{[]rune(suffix + " ")}, length
 
 	default:
-		// Multiple matches — compute LCP of suffixes
 		lcp := longestCommonPrefix(unique)
-
 		if lcp != "" {
-			// LCP adds something — complete to it silently
 			b.lastLine = ""
 			b.tabCount = 0
 			return [][]rune{[]rune(lcp)}, length
 		}
 
-		// LCP adds nothing — bell on first tab, show options on second
 		if current != b.lastLine {
 			b.lastLine = current
 			b.tabCount = 1
@@ -174,7 +178,6 @@ func (b *BellCompleter) Do(line []rune, pos int) ([][]rune, int) {
 
 		b.tabCount++
 		if b.tabCount == 2 {
-			// Reconstruct full names for display
 			var names []string
 			for _, s := range unique {
 				names = append(names, lastWord+s)
@@ -187,49 +190,6 @@ func (b *BellCompleter) Do(line []rune, pos int) ([][]rune, int) {
 			b.tabCount = 0
 		}
 		return [][]rune{[]rune("")}, 0
-	}
-}
-
-func main() {
-	builtinNames := map[string]bool{
-		"echo": true, "cd": true, "pwd": true, "exit": true, "type": true,
-	}
-
-	builtins := []readline.PrefixCompleterInterface{
-		readline.PcItem("echo"),
-		readline.PcItem("cd"),
-		readline.PcItem("pwd"),
-		readline.PcItem("exit"),
-		readline.PcItem("type"),
-	}
-
-	allItems := append(builtins, getPathCommands(builtinNames)...)
-	completer := &BellCompleter{
-		inner: readline.NewPrefixCompleter(allItems...),
-	}
-
-	rl, err := readline.NewEx(&readline.Config{
-		Prompt:          "$ ",
-		AutoComplete:    completer,
-		InterruptPrompt: "^C",
-		EOFPrompt:       "exit",
-		VimMode:         false,
-	})
-	if err != nil {
-		panic(err)
-	}
-	defer rl.Close()
-
-	for {
-		line, err := rl.Readline()
-		if err != nil {
-			break
-		}
-		line = strings.TrimSpace(line)
-		if line == "" {
-			continue
-		}
-		handleInput(line)
 	}
 }
 
