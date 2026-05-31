@@ -23,9 +23,7 @@ type BellCompleter struct {
 func (b *BellCompleter) Do(line []rune, pos int) ([][]rune, int) {
 	current := string(line[:pos])
 	candidates, length := b.inner.Do(line, pos)
-
 	if len(candidates) <= 1 {
-		// reset tab count when not multiple matches
 		b.tabCount = 0
 		b.lastLine = ""
 	}
@@ -39,14 +37,11 @@ func (b *BellCompleter) Do(line []rune, pos int) ([][]rune, int) {
 		return candidates, length
 
 	} else if len(candidates) == 1 {
-		candidate := strings.TrimRight(string(candidates[0]), " ")
-		withSpace := []rune(candidate + " ")
-		return [][]rune{withSpace}, length
-
+		suffix := strings.TrimRight(string(candidates[0]), " ")
+		return [][]rune{[]rune(suffix + " ")}, length
 	} else {
-		// multiple matches
 		if current != b.lastLine {
-			// input changed — reset and ring bell
+
 			b.lastLine = current
 			b.tabCount = 1
 			tty, _ := os.OpenFile("/dev/tty", os.O_WRONLY, 0)
@@ -56,7 +51,7 @@ func (b *BellCompleter) Do(line []rune, pos int) ([][]rune, int) {
 			}
 			return [][]rune{}, 0
 		} else {
-			// same input, second tab — print matches
+
 			b.tabCount++
 			if b.tabCount == 2 {
 				var names []string
@@ -69,7 +64,7 @@ func (b *BellCompleter) Do(line []rune, pos int) ([][]rune, int) {
 				os.Stdout.Write([]byte("\r\n"))
 				os.Stdout.Write([]byte(strings.Join(names, "  ")))
 				os.Stdout.Write([]byte("\r\n"))
-				os.Stdout.Write([]byte("$ " + current))
+				os.Stdout.Write([]byte("$ " + names[0]))
 
 				b.tabCount = 0
 			}
@@ -428,9 +423,16 @@ func handleCommand(command string, rest []string) {
 func getPathCommands() []readline.PrefixCompleterInterface {
 	var items []readline.PrefixCompleterInterface
 
-	seen := make(map[string]bool) // avoid duplicates
-	dirs := strings.Split(os.Getenv("PATH"), ":")
+	builtinNames := map[string]bool{
+		"echo": true, "cd": true, "pwd": true, "exit": true, "type": true,
+	}
+	seen := make(map[string]bool)
+	// seed seen with builtins so PATH doesn't re-add them
+	for name := range builtinNames {
+		seen[name] = true
+	}
 
+	dirs := strings.Split(os.Getenv("PATH"), ":")
 	for _, dir := range dirs {
 		entries, err := os.ReadDir(dir)
 		if err != nil {
