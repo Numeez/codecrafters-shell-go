@@ -67,11 +67,11 @@ func (b *BellCompleter) Do(line []rune, pos int) ([][]rune, int) {
 			}
 			b.tabCount++
 			if b.tabCount == 2 {
-				// Reconstruct full names and display
-				prefix := current[:len(current)-length]
+				matchedPrefix := current[len(current)-length:] // e.g. "xyz_"
+				staticPrefix := current[:len(current)-length]  // e.g. "" (nothing before)
 				var names []string
 				for _, s := range unique {
-					names = append(names, prefix+s)
+					names = append(names, staticPrefix+matchedPrefix+s)
 				}
 				sort.Strings(names)
 				os.Stdout.Write([]byte("\r\n"))
