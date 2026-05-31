@@ -192,6 +192,48 @@ func (b *BellCompleter) Do(line []rune, pos int) ([][]rune, int) {
 		return [][]rune{[]rune("")}, 0
 	}
 }
+func main() {
+	builtinNames := map[string]bool{
+		"echo": true, "cd": true, "pwd": true, "exit": true, "type": true,
+	}
+ 
+	builtins := []readline.PrefixCompleterInterface{
+		readline.PcItem("echo"),
+		readline.PcItem("cd"),
+		readline.PcItem("pwd"),
+		readline.PcItem("exit"),
+		readline.PcItem("type"),
+	}
+ 
+	allItems := append(builtins, getPathCommands(builtinNames)...)
+	completer := &BellCompleter{
+		inner: readline.NewPrefixCompleter(allItems...),
+	}
+ 
+	rl, err := readline.NewEx(&readline.Config{
+		Prompt:          "$ ",
+		AutoComplete:    completer,
+		InterruptPrompt: "^C",
+		EOFPrompt:       "exit",
+		VimMode:         false,
+	})
+	if err != nil {
+		panic(err)
+	}
+	defer rl.Close()
+ 
+	for {
+		line, err := rl.Readline()
+		if err != nil {
+			break
+		}
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		handleInput(line)
+	}
+}
 
 func handleInput(input string) {
 	args := parseArgs(input)
